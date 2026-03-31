@@ -25,11 +25,15 @@ conflibert_install <- function(envname = "conflibert", method = "auto") {
 
   # Auto-detect: use conda if available, otherwise virtualenv
   if (method == "auto") {
-    has_conda <- tryCatch({
-      reticulate::conda_binary()
-      TRUE
-    }, error = function(e) FALSE)
+    has_conda <- nzchar(Sys.which("conda"))
+    if (!has_conda) {
+      has_conda <- tryCatch({
+        bin <- reticulate::conda_binary()
+        file.exists(bin)
+      }, error = function(e) FALSE, warning = function(w) FALSE)
+    }
     method <- if (has_conda) "conda" else "virtualenv"
+    message("Detected method: ", method)
   }
 
   if (method == "conda") {
