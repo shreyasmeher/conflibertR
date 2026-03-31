@@ -3,6 +3,11 @@
 
 .onLoad <- function(libname, pkgname) {
   .cb$py <- NULL
+  # Point reticulate to the conflibert virtualenv if it exists
+  venv_path <- file.path("~", ".virtualenvs", "conflibert")
+  if (dir.exists(venv_path)) {
+    reticulate::use_virtualenv("conflibert", required = FALSE)
+  }
 }
 
 #' Get the Python inference module (lazy-loaded and cached)
