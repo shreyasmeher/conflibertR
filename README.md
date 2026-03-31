@@ -15,11 +15,17 @@ devtools::install_github("shreyasmeher/conflibertR")
 
 ## One-time setup
 
-Install the Python dependencies (torch, transformers, tensorflow):
+Install the Python dependencies (torch, transformers, tensorflow). Conda is recommended as it handles torch compatibility better across platforms:
 
 ```r
 library(conflibertR)
-conflibert_install()
+
+# Recommended (requires conda/miniconda):
+conflibert_install(method = "conda")
+
+# Alternative (if you don't have conda):
+conflibert_install(method = "virtualenv")
+
 # Restart R after this completes
 ```
 

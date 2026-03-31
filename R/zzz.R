@@ -3,10 +3,15 @@
 
 .onLoad <- function(libname, pkgname) {
   .cb$py <- NULL
-  # Point reticulate to the conflibert virtualenv if it exists
-  venv_path <- file.path("~", ".virtualenvs", "conflibert")
-  if (dir.exists(venv_path)) {
-    reticulate::use_virtualenv("conflibert", required = FALSE)
+  # Try to find the conflibert environment (conda first, then virtualenv)
+  conda_envs <- tryCatch(reticulate::conda_list(), error = function(e) NULL)
+  if (!is.null(conda_envs) && "conflibert" %in% conda_envs$name) {
+    reticulate::use_condaenv("conflibert", required = FALSE)
+  } else {
+    venv_path <- file.path("~", ".virtualenvs", "conflibert")
+    if (dir.exists(venv_path)) {
+      reticulate::use_virtualenv("conflibert", required = FALSE)
+    }
   }
 }
 
