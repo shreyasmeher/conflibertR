@@ -102,15 +102,37 @@ conflibert_benchmark(
 #> 1    0.85      0.83   0.87  0.85   200
 ```
 
-## Fine-tuning
+## Example Datasets
 
-Train a custom classifier on your own data:
+The package bundles small synthetic datasets for quick testing:
 
 ```r
+# Binary: conflict vs non-conflict (80 train / 20 dev / 20 test)
+data <- conflibert_example("binary")
+
+# Multiclass: 4 event types (80 train / 20 dev / 20 test)
+data <- conflibert_example("multiclass")
+
+data$train
+#> # A data.frame: 80 x 2
+#>   text                                                                    label
+#>   <chr>                                                                   <int>
+#> 1 Government forces launched an offensive against rebel positions ...          1
+#> 2 The national football team secured a convincing victory ...                  0
+#> ...
+```
+
+## Fine-tuning
+
+Train a custom classifier on your own data (or use the built-in examples):
+
+```r
+data <- conflibert_example("binary")
+
 result <- conflibert_finetune(
-  train = train_df,   # data.frame with 'text' and 'label' columns
-  dev   = dev_df,
-  test  = test_df,
+  train = data$train,
+  dev   = data$dev,
+  test  = data$test,
   model = "ConfliBERT",
   task  = "binary",
   epochs = 3
@@ -124,7 +146,7 @@ result$metrics
 
 # Save the trained model for later
 result <- conflibert_finetune(
-  train = train_df, dev = dev_df, test = test_df,
+  train = data$train, dev = data$dev, test = data$test,
   model = "RoBERTa Base",
   save_dir = "./my_model"
 )
@@ -135,10 +157,12 @@ result <- conflibert_finetune(
 Compare multiple base architectures on the same dataset:
 
 ```r
+data <- conflibert_example("binary")
+
 comparison <- conflibert_compare(
-  train  = train_df,
-  dev    = dev_df,
-  test   = test_df,
+  train  = data$train,
+  dev    = data$dev,
+  test   = data$test,
   models = c("ConfliBERT", "BERT Base Uncased", "RoBERTa Base", "ModernBERT Base"),
   task   = "binary",
   epochs = 3

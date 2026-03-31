@@ -5,6 +5,7 @@
 - Added `conflibert_benchmark()` for evaluating the pretrained classifier against labeled data.
 - Added `conflibert_models()` to list available base model architectures.
 - Seven base models supported: ConfliBERT, BERT (uncased/cased), RoBERTa, ModernBERT, DeBERTa v3, DistilBERT.
+- Added `conflibert_example()` to load bundled example datasets (binary and multiclass) for quick testing.
 
 # conflibertR 0.1.0
 
