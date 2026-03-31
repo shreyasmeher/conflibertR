@@ -3,6 +3,7 @@
 export(conflibert_benchmark)
 export(conflibert_classify)
 export(conflibert_compare)
+export(conflibert_example)
 export(conflibert_finetune)
 export(conflibert_install)
 export(conflibert_models)
