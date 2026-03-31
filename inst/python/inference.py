@@ -30,8 +30,9 @@ AVAILABLE_MODELS = list(MODEL_MAP.keys())
 def _get_device():
     if torch.cuda.is_available():
         return torch.device("cuda")
-    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        return torch.device("mps")
+    # MPS (Apple Silicon) can have compatibility issues with some models,
+    # and CPU is fast enough for BERT-class inference. Use CUDA when
+    # available, otherwise CPU.
     return torch.device("cpu")
 
 
