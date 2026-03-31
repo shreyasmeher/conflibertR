@@ -39,28 +39,33 @@ def _load(task):
     if task in _models:
         return _models[task]
 
-    from transformers import (
-        AutoTokenizer,
-        AutoModelForSequenceClassification,
-        AutoModelForTokenClassification,
-        TFAutoModelForQuestionAnswering,
-    )
+    from transformers import AutoTokenizer
 
     device = _get_device()
 
     if task == "ner":
+        from transformers import AutoModelForTokenClassification
         name = "eventdata-utd/conflibert-named-entity-recognition"
         model = AutoModelForTokenClassification.from_pretrained(name).to(device)
         tokenizer = AutoTokenizer.from_pretrained(name)
     elif task == "classify":
+        from transformers import AutoModelForSequenceClassification
         name = "eventdata-utd/conflibert-binary-classification"
         model = AutoModelForSequenceClassification.from_pretrained(name).to(device)
         tokenizer = AutoTokenizer.from_pretrained(name)
     elif task == "multilabel":
+        from transformers import AutoModelForSequenceClassification
         name = "eventdata-utd/conflibert-satp-relevant-multilabel"
         model = AutoModelForSequenceClassification.from_pretrained(name).to(device)
         tokenizer = AutoTokenizer.from_pretrained(name)
     elif task == "qa":
+        try:
+            from transformers import TFAutoModelForQuestionAnswering
+        except ImportError:
+            raise ImportError(
+                "Question answering requires TensorFlow support in transformers. "
+                "Install with: pip install 'transformers<5' tensorflow tf-keras"
+            )
         name = "salsarra/ConfliBERT-QA"
         model = TFAutoModelForQuestionAnswering.from_pretrained(name)
         tokenizer = AutoTokenizer.from_pretrained(name)
