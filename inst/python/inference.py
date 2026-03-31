@@ -60,9 +60,9 @@ def _load(task):
         model = AutoModelForSequenceClassification.from_pretrained(name).to(device)
         tokenizer = AutoTokenizer.from_pretrained(name)
     elif task == "qa":
-        from transformers import AutoModelForQuestionAnswering
+        from transformers import TFAutoModelForQuestionAnswering
         name = "salsarra/ConfliBERT-QA"
-        model = AutoModelForQuestionAnswering.from_pretrained(name, from_tf=True)
+        model = TFAutoModelForQuestionAnswering.from_pretrained(name)
         tokenizer = AutoTokenizer.from_pretrained(name)
     else:
         raise ValueError(f"Unknown task: {task}")
@@ -181,16 +181,16 @@ def qa(context, question):
 
     Returns a dict with 'answer'.
     """
+    import tensorflow as tf
+
     model, tokenizer = _load("qa")
-    inputs = tokenizer(question, context, return_tensors="pt", truncation=True)
+    inputs = tokenizer(question, context, return_tensors="tf", truncation=True)
+    outputs = model(inputs)
 
-    with torch.no_grad():
-        outputs = model(**inputs)
-
-    start = torch.argmax(outputs.start_logits, dim=1).item()
-    end = torch.argmax(outputs.end_logits, dim=1).item() + 1
+    start = tf.argmax(outputs.start_logits, axis=1).numpy()[0]
+    end = tf.argmax(outputs.end_logits, axis=1).numpy()[0] + 1
     answer_tokens = tokenizer.convert_ids_to_tokens(
-        inputs["input_ids"][0][start:end]
+        inputs["input_ids"].numpy()[0][start:end]
     )
     answer = tokenizer.convert_tokens_to_string(answer_tokens)
 
