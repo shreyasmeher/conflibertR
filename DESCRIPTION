@@ -1,0 +1,20 @@
+Package: conflibertR
+Title: ConfliBERT Inference for Conflict and Political Violence Text
+Version: 0.1.0
+Authors@R: person("Shreyas", "Meher", role = c("aut", "cre"),
+    comment = c(website = "http://shreyasmeher.com"))
+Description: R interface to ConfliBERT, a pretrained language model for
+    conflict and political violence text analysis. Provides functions for
+    named entity recognition, binary classification, multilabel
+    classification, and question answering. Models are loaded from
+    HuggingFace via the Python transformers library through reticulate.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.0
+Imports:
+    reticulate (>= 1.34),
+    tibble
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
