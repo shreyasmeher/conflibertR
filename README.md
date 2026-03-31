@@ -197,6 +197,8 @@ conflibert_models()
 
 The package uses [reticulate](https://rstudio.github.io/reticulate/) to call HuggingFace Transformers models via Python. Models are downloaded from HuggingFace Hub on first use and cached locally. No GPU is required (CPU works fine), but CUDA and Apple Silicon MPS are used automatically when available.
 
-## Citation
+## Citations
 
 Brandt, P.T., Alsarra, S., D'Orazio, V., Heintze, D., Khan, L., Meher, S., Osorio, J. and Sianan, M., 2025. Extractive versus Generative Language Models for Political Conflict Text Classification. *Political Analysis*, pp.1-29.
+
+Hu, Y., Hosseini, M., Parolin, E.S., Osorio, J., Khan, L., Brandt, P. and D’Orazio, V., 2022, July. Conflibert: A pre-trained language model for political conflict and violence. In Proceedings of the 2022 conference of the north American chapter of the association for computational linguistics: human language technologies (pp. 5469-5482).
