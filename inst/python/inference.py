@@ -8,8 +8,23 @@ import os
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 import torch
+import numpy as np
+import gc
+import tempfile
 
 _models = {}
+
+MODEL_MAP = {
+    "ConfliBERT": "snowood1/ConfliBERT-scr-uncased",
+    "BERT Base Uncased": "bert-base-uncased",
+    "BERT Base Cased": "bert-base-cased",
+    "RoBERTa Base": "roberta-base",
+    "ModernBERT Base": "answerdotai/ModernBERT-base",
+    "DeBERTa v3 Base": "microsoft/deberta-v3-base",
+    "DistilBERT Base": "distilbert-base-uncased",
+}
+
+AVAILABLE_MODELS = list(MODEL_MAP.keys())
 
 
 def _get_device():
@@ -180,3 +195,215 @@ def qa(context, question):
     answer = tokenizer.convert_tokens_to_string(answer_tokens)
 
     return {"answer": answer}
+
+
+# =========================================================================
+# Benchmarking & Fine-tuning
+# =========================================================================
+
+def benchmark(texts, labels):
+    """Evaluate the pretrained binary classifier against labeled data.
+
+    Returns a dict with accuracy, precision, recall, f1, n.
+    """
+    from sklearn.metrics import (
+        accuracy_score, precision_score, recall_score, f1_score,
+    )
+
+    texts = list(texts)
+    labels = [int(l) for l in labels]
+    predictions = [classify(t)["class"] for t in texts]
+
+    return {
+        "accuracy": round(accuracy_score(labels, predictions), 4),
+        "precision": round(precision_score(labels, predictions, zero_division=0), 4),
+        "recall": round(recall_score(labels, predictions, zero_division=0), 4),
+        "f1": round(f1_score(labels, predictions, zero_division=0), 4),
+        "n": len(labels),
+    }
+
+
+class _Dataset(torch.utils.data.Dataset):
+    def __init__(self, encodings, labels):
+        self.encodings = encodings
+        self.labels = [int(l) for l in labels]
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        item = {k: torch.tensor(v[idx]) for k, v in self.encodings.items()}
+        item["labels"] = torch.tensor(self.labels[idx], dtype=torch.long)
+        return item
+
+
+def _make_metrics_fn(task_type):
+    from sklearn.metrics import (
+        accuracy_score, precision_score, recall_score, f1_score,
+    )
+
+    def compute(eval_pred):
+        logits, labels = eval_pred
+        preds = np.argmax(logits, axis=-1)
+        acc = accuracy_score(labels, preds)
+        if task_type == "binary":
+            return {
+                "accuracy": acc,
+                "precision": precision_score(labels, preds, zero_division=0),
+                "recall": recall_score(labels, preds, zero_division=0),
+                "f1": f1_score(labels, preds, zero_division=0),
+            }
+        return {
+            "accuracy": acc,
+            "f1_macro": f1_score(labels, preds, average="macro", zero_division=0),
+            "f1_micro": f1_score(labels, preds, average="micro", zero_division=0),
+            "precision_macro": precision_score(
+                labels, preds, average="macro", zero_division=0
+            ),
+            "recall_macro": recall_score(
+                labels, preds, average="macro", zero_division=0
+            ),
+        }
+
+    return compute
+
+
+def finetune(
+    train_texts, train_labels, dev_texts, dev_labels,
+    test_texts, test_labels, model_name="ConfliBERT",
+    task="binary", epochs=3, batch_size=8, lr=2e-5,
+    save_dir=None,
+):
+    """Fine-tune a classification model and evaluate on the test set.
+
+    Returns a dict with metrics, runtime, predictions, probabilities,
+    true_labels, and model_dir.
+    """
+    from transformers import (
+        AutoTokenizer,
+        AutoModelForSequenceClassification,
+        TrainingArguments,
+        Trainer,
+        EarlyStoppingCallback,
+    )
+
+    model_id = MODEL_MAP.get(model_name, model_name)
+    train_texts = list(train_texts)
+    dev_texts = list(dev_texts)
+    test_texts = list(test_texts)
+    train_labels = [int(l) for l in train_labels]
+    dev_labels = [int(l) for l in dev_labels]
+    test_labels = [int(l) for l in test_labels]
+    num_labels = max(max(train_labels), max(dev_labels), max(test_labels)) + 1
+    if task == "binary":
+        num_labels = 2
+
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    model = AutoModelForSequenceClassification.from_pretrained(
+        model_id, num_labels=num_labels,
+    )
+
+    train_ds = _Dataset(
+        tokenizer(train_texts, truncation=True, padding=True, max_length=512),
+        train_labels,
+    )
+    dev_ds = _Dataset(
+        tokenizer(dev_texts, truncation=True, padding=True, max_length=512),
+        dev_labels,
+    )
+    test_ds = _Dataset(
+        tokenizer(test_texts, truncation=True, padding=True, max_length=512),
+        test_labels,
+    )
+
+    output_dir = save_dir or tempfile.mkdtemp(prefix="conflibert_r_")
+    best_metric = "f1" if task == "binary" else "f1_macro"
+
+    training_args = TrainingArguments(
+        output_dir=output_dir,
+        num_train_epochs=int(epochs),
+        per_device_train_batch_size=int(batch_size),
+        per_device_eval_batch_size=int(batch_size) * 2,
+        learning_rate=float(lr),
+        weight_decay=0.01,
+        warmup_ratio=0.1,
+        eval_strategy="epoch",
+        save_strategy="epoch",
+        load_best_model_at_end=True,
+        metric_for_best_model=best_metric,
+        greater_is_better=True,
+        save_total_limit=1,
+        report_to="none",
+        seed=42,
+    )
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_ds,
+        eval_dataset=dev_ds,
+        compute_metrics=_make_metrics_fn(task),
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+    )
+
+    train_result = trainer.train()
+    pred_output = trainer.predict(test_ds)
+    logits = pred_output.predictions
+    preds = np.argmax(logits, axis=-1).tolist()
+    probs = torch.softmax(torch.tensor(logits), dim=1).numpy().tolist()
+
+    test_results = trainer.evaluate(test_ds, metric_key_prefix="test")
+    metrics = {}
+    for k, v in test_results.items():
+        if isinstance(v, (int, float)) and "epoch" not in k:
+            metrics[k.replace("test_", "")] = round(float(v), 4)
+
+    runtime = round(train_result.metrics.get("train_runtime", 0), 1)
+
+    if save_dir:
+        trainer.model.save_pretrained(save_dir)
+        tokenizer.save_pretrained(save_dir)
+
+    return {
+        "metrics": metrics,
+        "runtime": runtime,
+        "predictions": preds,
+        "probabilities": probs,
+        "true_labels": test_labels,
+        "model_dir": output_dir,
+    }
+
+
+def compare(
+    train_texts, train_labels, dev_texts, dev_labels,
+    test_texts, test_labels, model_names,
+    task="binary", epochs=3, batch_size=8, lr=2e-5,
+):
+    """Fine-tune multiple models on the same data and compare performance.
+
+    Returns a list of dicts, one per model, each with 'model', metrics, and
+    'runtime' keys.
+    """
+    model_names = list(model_names)
+    results = []
+
+    for name in model_names:
+        try:
+            result = finetune(
+                train_texts, train_labels,
+                dev_texts, dev_labels,
+                test_texts, test_labels,
+                model_name=name, task=task,
+                epochs=epochs, batch_size=batch_size, lr=lr,
+            )
+            row = {"model": name, "runtime": result["runtime"]}
+            row.update(result["metrics"])
+            results.append(row)
+        except Exception as e:
+            results.append({"model": name, "error": str(e)})
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    return results
