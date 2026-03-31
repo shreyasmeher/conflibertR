@@ -19,12 +19,21 @@
 #' # Alternative:
 #' conflibert_install(method = "virtualenv")
 #' }
-conflibert_install <- function(envname = "conflibert", method = "conda") {
+conflibert_install <- function(envname = "conflibert", method = "auto") {
   packages <- c("torch", "transformers>=4.40,<5", "accelerate", "scikit-learn",
                  "tensorflow", "tf-keras")
 
+  # Auto-detect: use conda if available, otherwise virtualenv
+  if (method == "auto") {
+    has_conda <- tryCatch({
+      reticulate::conda_binary()
+      TRUE
+    }, error = function(e) FALSE)
+    method <- if (has_conda) "conda" else "virtualenv"
+  }
+
   if (method == "conda") {
-    message("Installing with conda (recommended)...")
+    message("Installing with conda...")
     reticulate::conda_create(envname)
     reticulate::conda_install(envname, packages = packages, pip = TRUE)
   } else {
