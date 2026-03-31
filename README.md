@@ -7,11 +7,8 @@ All four inference tasks are supported: Named Entity Recognition, Binary Classif
 ## Installation
 
 ```r
-# From the local package directory
-install.packages("path/to/conflibertR", repos = NULL, type = "source")
-
-# Or with devtools
-devtools::install_local("path/to/conflibertR")
+# install.packages("devtools")
+devtools::install_github("shreyasmeher/conflibertR")
 ```
 
 ## One-time setup
