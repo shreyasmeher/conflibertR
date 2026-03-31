@@ -13,7 +13,8 @@
 #' conflibert_install()
 #' }
 conflibert_install <- function(envname = "conflibert", method = "virtualenv") {
-  packages <- c("torch", "transformers>=4.40,<5", "tensorflow", "tf-keras")
+  packages <- c("torch", "transformers>=4.40,<5", "accelerate", "scikit-learn",
+                 "tensorflow", "tf-keras")
 
   if (method == "virtualenv") {
     reticulate::virtualenv_create(envname)
