@@ -17,10 +17,10 @@ conflibert_install <- function(envname = "conflibert", method = "virtualenv") {
 
   if (method == "virtualenv") {
     reticulate::virtualenv_create(envname)
-    reticulate::virtualenv_install(envname, packages = packages, pip = TRUE)
+    reticulate::virtualenv_install(envname, packages = packages)
   } else {
     reticulate::conda_create(envname)
-    reticulate::conda_install(envname, packages = packages, pip = TRUE)
+    reticulate::conda_install(envname, packages = packages, pip = TRUE  )
   }
 
   message("Python dependencies installed in '", envname, "' environment.")
