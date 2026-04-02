@@ -20,5 +20,8 @@ Imports:
     reticulate (>= 1.34),
     tibble
 Suggests:
+    knitr,
+    rmarkdown,
     testthat (>= 3.0.0)
+VignetteBuilder: knitr
 Config/testthat/edition: 3

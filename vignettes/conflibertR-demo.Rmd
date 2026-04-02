@@ -1,0 +1,214 @@
+---
+title: "Getting Started with conflibertR"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with conflibertR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+conflibertR brings [ConfliBERT](https://huggingface.co/eventdata-utd)
+--- a transformer model purpose-built for conflict and political violence
+text --- into R. This vignette walks through every major capability of
+the package: pretrained inference, benchmarking, fine-tuning, and model
+comparison.
+
+## Setup
+
+Install the Python backend once. This creates a dedicated conda
+environment with PyTorch, HuggingFace Transformers, and related
+dependencies. Restart R after installation.
+
+```{r setup}
+library(conflibertR)
+
+# Run once, then restart R
+conflibert_install()
+```
+
+## Named Entity Recognition
+
+Extract entities such as persons, organizations, locations, weapons, and
+temporal expressions from conflict-related text.
+
+```{r ner-single}
+ner_results <- conflibert_ner(
+  "The United Nations deployed peacekeepers to eastern Congo
+   after rebel forces attacked Goma on Tuesday."
+)
+ner_results
+```
+
+The function is vectorized --- pass multiple texts to process them in one
+call.
+
+```{r ner-batch}
+ner_batch <- conflibert_ner(c(
+  "NATO forces launched airstrikes near Tripoli in March 2024.",
+  "President Zelenskyy met with General Syrskyi in Kyiv."
+))
+ner_batch
+```
+
+## Binary Classification
+
+Determine whether a piece of text describes a conflict event or not.
+Each row returns a label, numeric class, confidence score, and
+per-class probabilities.
+
+```{r classify}
+classify_results <- conflibert_classify(c(
+  "Armed militants stormed a military outpost killing twelve soldiers.",
+  "The European Central Bank held interest rates steady at 4.5 percent.",
+  "Protesters clashed with riot police outside the parliament building.",
+  "A new trade agreement was signed between Japan and Australia."
+))
+classify_results
+```
+
+## Multilabel Event Classification
+
+Score text against four event categories --- Armed Assault, Bombing or
+Explosion, Kidnapping, and Other --- each evaluated independently.
+
+```{r multilabel}
+event_results <- conflibert_multilabel(c(
+  "A car bomb exploded near the government ministry in Baghdad.",
+  "Gunmen kidnapped three aid workers travelling through the Sahel region."
+))
+event_results
+```
+
+## Question Answering
+
+Extract answers directly from a passage of conflict-related text.
+
+```{r qa}
+context <- "On 15 September 2023, ethnic clashes erupted in Manipur, India.
+  The Indian Army deployed two battalions to restore order.
+  At least 60 people were killed and over 200 injured in the violence."
+
+conflibert_qa(context, "How many people were killed?")
+conflibert_qa(context, "Who was deployed to restore order?")
+conflibert_qa(context, "Where did the clashes occur?")
+```
+
+## Benchmarking the Pretrained Classifier
+
+Evaluate the pretrained binary classifier against your own labeled data.
+The package includes small example datasets you can use to get started.
+
+```{r benchmark}
+data <- conflibert_example("binary")
+bench <- conflibert_benchmark(data$test$text, data$test$label)
+bench
+```
+
+## Fine-Tuning a Custom Classifier
+
+Train your own binary classifier on labeled data. The example dataset
+ships with the package: 80 training, 20 dev, and 20 test examples.
+
+```{r finetune-binary}
+data <- conflibert_example("binary")
+
+result <- conflibert_finetune(
+  train  = data$train,
+  dev    = data$dev,
+  test   = data$test,
+  model  = "ConfliBERT",
+  task   = "binary",
+  epochs = 3
+)
+
+cat("Accuracy:", result$metrics$accuracy, "\n")
+cat("F1 Score:", result$metrics$f1, "\n")
+```
+
+The returned list also contains raw predictions and class probabilities
+for the test set, plus the path to the saved model checkpoint.
+
+```{r finetune-inspect}
+# Per-sample predicted labels
+head(result$predictions)
+
+# Class probability matrix (rows = samples, columns = classes)
+head(result$probabilities)
+
+# Saved model directory (NULL if save_dir was not set)
+result$model_dir
+```
+
+## Comparing Multiple Models
+
+Pit ConfliBERT against general-purpose transformers on the same task.
+`conflibert_compare()` fine-tunes each model and returns a tidy
+comparison table.
+
+```{r compare}
+comparison <- conflibert_compare(
+  train  = data$train,
+  dev    = data$dev,
+  test   = data$test,
+  models = c("ConfliBERT", "BERT Base Uncased", "DistilBERT Base"),
+  task   = "binary",
+  epochs = 3
+)
+comparison
+```
+
+See all available base models with:
+
+```{r models}
+conflibert_models()
+```
+
+## Multiclass Fine-Tuning
+
+The package also supports multiclass classification. The bundled
+multiclass dataset has four event types: Diplomacy, Armed Conflict,
+Protest, and Humanitarian.
+
+```{r finetune-multiclass}
+mc_data <- conflibert_example("multiclass")
+
+mc_result <- conflibert_finetune(
+  train  = mc_data$train,
+  dev    = mc_data$dev,
+  test   = mc_data$test,
+  model  = "ConfliBERT",
+  task   = "multiclass",
+  epochs = 3
+)
+
+cat("Multiclass Accuracy:", mc_result$metrics$accuracy, "\n")
+cat("Multiclass F1:      ", mc_result$metrics$f1, "\n")
+```
+
+## Summary
+
+| Function                  | Task                                  |
+|---------------------------|---------------------------------------|
+| `conflibert_ner()`        | Named entity recognition              |
+| `conflibert_classify()`   | Binary conflict classification        |
+| `conflibert_multilabel()` | Multilabel event type scoring         |
+| `conflibert_qa()`         | Extractive question answering         |
+| `conflibert_benchmark()`  | Evaluate pretrained classifier        |
+| `conflibert_finetune()`   | Train a custom classifier             |
+| `conflibert_compare()`    | Compare multiple model architectures  |
+| `conflibert_example()`    | Load bundled example datasets         |
+| `conflibert_models()`     | List available base models            |
+
+For more details, see the [package
+repository](https://github.com/shreyasmeher/conflibertR) and the
+reference paper: Brandt et al. (2025), "Extractive versus Generative
+Language Models for Political Conflict Text Classification," *Political
+Analysis*.
