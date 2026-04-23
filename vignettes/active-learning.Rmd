@@ -140,6 +140,39 @@ Three uncertainty strategies are available. Pass one via `strategy`:
 - `"least_confidence"` — lowest maximum class probability. Simplest
   strategy; a good baseline.
 
+## Diversity-aware batches
+
+Pure uncertainty sampling can pick several near-duplicates in one
+batch — a problem when your pool has many similar texts. Pass
+`diverse = TRUE` to cluster the top-scoring candidates in the model's
+embedding space and pick the highest-scoring sample from each cluster:
+
+```{r}
+session <- conflibert_active_start(
+  seed = data$seed, pool = data$pool, dev = data$dev,
+  strategy = "entropy",
+  diverse  = TRUE,
+  diversity_candidates = 30    # defaults to 3 * query_size
+)
+```
+
+## LoRA fine-tuning
+
+For bigger base models or tighter GPU budgets, train only a low-rank
+adapter each round. The adapter is merged into the base model before
+every round ends, so scoring, saving, and reloading behave exactly
+like full fine-tuning:
+
+```{r}
+session <- conflibert_active_start(
+  seed = data$seed, pool = data$pool, dev = data$dev,
+  model      = "DeBERTa v3 Base",
+  use_lora   = TRUE,
+  lora_rank  = 8,
+  lora_alpha = 16
+)
+```
+
 ## Saving the model
 
 Persist the final model as a standard HuggingFace checkpoint:

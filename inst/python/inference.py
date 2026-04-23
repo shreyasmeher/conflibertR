@@ -237,6 +237,33 @@ class _Dataset(torch.utils.data.Dataset):
         return item
 
 
+def _apply_lora(model, lora_rank, lora_alpha):
+    """Wrap a classification head model with a LoRA adapter."""
+    try:
+        from peft import LoraConfig, TaskType, get_peft_model
+    except ImportError as e:
+        raise ImportError(
+            "LoRA fine-tuning requires the `peft` package. "
+            "Reinstall the Python backend with conflibert_install()."
+        ) from e
+    lora_cfg = LoraConfig(
+        task_type=TaskType.SEQ_CLS,
+        r=int(lora_rank),
+        lora_alpha=int(lora_alpha),
+        lora_dropout=0.1,
+        bias="none",
+    )
+    model.enable_input_require_grads()
+    return get_peft_model(model, lora_cfg)
+
+
+def _merge_lora(model):
+    """Merge a LoRA adapter into the base model so saves are vanilla checkpoints."""
+    if hasattr(model, "merge_and_unload"):
+        return model.merge_and_unload()
+    return model
+
+
 def _make_metrics_fn(task_type):
     from sklearn.metrics import (
         accuracy_score, precision_score, recall_score, f1_score,
@@ -272,7 +299,7 @@ def finetune(
     train_texts, train_labels, dev_texts, dev_labels,
     test_texts, test_labels, model_name="ConfliBERT",
     task="binary", epochs=3, batch_size=8, lr=2e-5,
-    save_dir=None,
+    save_dir=None, use_lora=False, lora_rank=8, lora_alpha=16,
 ):
     """Fine-tune a classification model and evaluate on the test set.
 
@@ -302,6 +329,8 @@ def finetune(
     model = AutoModelForSequenceClassification.from_pretrained(
         model_id, num_labels=num_labels,
     )
+    if use_lora:
+        model = _apply_lora(model, lora_rank, lora_alpha)
 
     train_ds = _Dataset(
         tokenizer(train_texts, truncation=True, padding=True, max_length=512),
@@ -360,8 +389,12 @@ def finetune(
 
     runtime = round(train_result.metrics.get("train_runtime", 0), 1)
 
+    final_model = trainer.model
+    if use_lora:
+        final_model = _merge_lora(final_model)
+
     if save_dir:
-        trainer.model.save_pretrained(save_dir)
+        final_model.save_pretrained(save_dir)
         tokenizer.save_pretrained(save_dir)
 
     return {
@@ -378,6 +411,7 @@ def compare(
     train_texts, train_labels, dev_texts, dev_labels,
     test_texts, test_labels, model_names,
     task="binary", epochs=3, batch_size=8, lr=2e-5,
+    use_lora=False, lora_rank=8, lora_alpha=16,
 ):
     """Fine-tune multiple models on the same data and compare performance.
 
@@ -395,6 +429,7 @@ def compare(
                 test_texts, test_labels,
                 model_name=name, task=task,
                 epochs=epochs, batch_size=batch_size, lr=lr,
+                use_lora=use_lora, lora_rank=lora_rank, lora_alpha=lora_alpha,
             )
             row = {"model": name, "runtime": result["runtime"]}
             row.update(result["metrics"])
@@ -410,6 +445,65 @@ def compare(
 
 
 # =========================================================================
+# Loading saved classifiers
+# =========================================================================
+
+def load_classifier(model_dir):
+    """Load a fine-tuned classifier from disk.
+
+    Returns a dict with model, tokenizer, and num_labels.
+    """
+    from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+    tokenizer = AutoTokenizer.from_pretrained(model_dir)
+    model = AutoModelForSequenceClassification.from_pretrained(model_dir)
+    model.eval()
+    return {
+        "model": model,
+        "tokenizer": tokenizer,
+        "num_labels": int(model.config.num_labels),
+    }
+
+
+def predict_classifier(model, tokenizer, texts, max_seq_len=512, batch_size=32):
+    """Batched inference for a loaded classifier.
+
+    Returns a dict with predictions (list of ints) and probabilities
+    (list of list[float], one row per input).
+    """
+    texts = list(texts)
+    if not texts:
+        return {"predictions": [], "probabilities": []}
+
+    device = _get_device()
+    model = model.to(device)
+    model.eval()
+
+    all_preds = []
+    all_probs = []
+    for i in range(0, len(texts), int(batch_size)):
+        batch = texts[i:i + int(batch_size)]
+        inputs = tokenizer(
+            batch, return_tensors="pt", truncation=True,
+            padding=True, max_length=int(max_seq_len),
+        )
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+        with torch.no_grad():
+            logits = model(**inputs).logits
+        probs = torch.softmax(logits, dim=1).cpu().numpy()
+        preds = np.argmax(probs, axis=1).tolist()
+        all_preds.extend([int(p) for p in preds])
+        all_probs.extend([[float(x) for x in row] for row in probs])
+
+    try:
+        model.cpu()
+    except Exception:
+        pass
+
+    return {"predictions": all_preds, "probabilities": all_probs}
+
+
+# =========================================================================
 # Active Learning
 # =========================================================================
 
@@ -417,6 +511,7 @@ def al_train(
     texts, labels, num_labels, model_name="ConfliBERT",
     epochs=3, batch_size=8, lr=2e-5, max_seq_len=512,
     dev_texts=None, dev_labels=None, task="binary",
+    use_lora=False, lora_rank=8, lora_alpha=16,
 ):
     """Train one active-learning round on the given labeled data.
 
@@ -443,6 +538,8 @@ def al_train(
     model = AutoModelForSequenceClassification.from_pretrained(
         model_id, num_labels=num_labels,
     )
+    if use_lora:
+        model = _apply_lora(model, lora_rank, lora_alpha)
 
     train_ds = _Dataset(
         tokenizer(texts, truncation=True, padding=True, max_length=int(max_seq_len)),
@@ -493,6 +590,8 @@ def al_train(
     runtime = round(train_result.metrics.get("train_runtime", 0), 1)
 
     trained = trainer.model
+    if use_lora:
+        trained = _merge_lora(trained)
     try:
         trained = trained.cpu()
     except Exception:
@@ -555,6 +654,42 @@ def al_score(
     except Exception:
         pass
     return scores
+
+
+def al_embed(model, tokenizer, texts, max_seq_len=512, batch_size=32):
+    """Return [CLS] embeddings for each text as an (n, hidden) numpy array.
+
+    Used by diversity-aware query selection to cluster candidates in
+    representation space so the picked batch is not dominated by
+    near-duplicates.
+    """
+    texts = list(texts)
+    if not texts:
+        return np.zeros((0, 0), dtype=np.float32)
+
+    device = _get_device()
+    model = model.to(device)
+    model.eval()
+
+    chunks = []
+    for i in range(0, len(texts), int(batch_size)):
+        batch = texts[i:i + int(batch_size)]
+        inputs = tokenizer(
+            batch, return_tensors="pt", truncation=True,
+            padding=True, max_length=int(max_seq_len),
+        )
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+        with torch.no_grad():
+            out = model(**inputs, output_hidden_states=True)
+        last_hidden = out.hidden_states[-1]
+        cls = last_hidden[:, 0, :].cpu().numpy().astype(np.float32)
+        chunks.append(cls)
+
+    try:
+        model.cpu()
+    except Exception:
+        pass
+    return np.vstack(chunks)
 
 
 def al_save(model, tokenizer, save_dir):

@@ -6,7 +6,9 @@ R interface to [ConfliBERT](https://github.com/eventdata/ConfliBERT), a pretrain
 
 **Training:** Fine-tune custom classifiers on your own data with any of 7 base models, and compare their performance side by side.
 
-**Active Learning:** Iteratively label an unlabeled pool by focusing on the most uncertain samples — with a built-in Shiny gadget for point-and-click labeling.
+**Active Learning:** Iteratively label an unlabeled pool by focusing on the most uncertain samples — with a built-in Shiny gadget for point-and-click labeling, plus diversity-aware batch selection.
+
+**Parameter-efficient training:** LoRA fine-tuning cuts GPU memory ~5× so bigger models run on modest hardware.
 
 ## Installation
 
@@ -161,6 +163,30 @@ result <- conflibert_finetune(
   model = "RoBERTa Base",
   save_dir = "./my_model"
 )
+
+# LoRA: train only a small adapter — cuts GPU memory ~5x
+result <- conflibert_finetune(
+  train = data$train, dev = data$dev, test = data$test,
+  model = "DeBERTa v3 Base",
+  use_lora = TRUE, lora_rank = 8,
+  save_dir = "./my_lora_model"
+)
+```
+
+### Loading a saved classifier
+
+Any model saved with `save_dir=` (including LoRA runs — the adapter is
+merged before saving) can be reloaded for inference:
+
+```r
+clf <- conflibert_load("./my_model")
+predict(clf, c("Armed clashes erupted near the border.",
+               "The city hosted a jazz festival this weekend."))
+#> # A tibble: 2 x 5
+#>   text                                          class confidence prob_0 prob_1
+#>   <chr>                                         <int>      <dbl>  <dbl>  <dbl>
+#> 1 Armed clashes erupted near the border.            1      0.97   0.03   0.97
+#> 2 The city hosted a jazz festival this weekend.     0      0.99   0.99   0.01
 ```
 
 ## Comparing Models
@@ -213,7 +239,9 @@ session <- conflibert_active_start(
   pool       = data$pool,    # unlabeled texts
   dev        = data$dev,     # tracks metrics each round
   strategy   = "entropy",    # or "margin" / "least_confidence"
-  query_size = 10
+  diverse    = TRUE,         # cluster candidates to avoid near-duplicates
+  query_size = 10,
+  use_lora   = TRUE          # optional: parameter-efficient training
 )
 
 session
