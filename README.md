@@ -226,6 +226,11 @@ session$query   # tibble: 10 texts + uncertainty scores
 # 2. Label the query — easiest route is the built-in Shiny gadget
 labels  <- conflibert_active_label(session)
 session <- conflibert_active_next(session, labels)
+```
+
+![Active learning gadget](man/figures/active-learning-gadget.png)
+
+```r
 
 # 3. Iterate until the pool is drained or metrics plateau
 while (!session$done) {
@@ -240,6 +245,8 @@ plot(session)              # two-panel: learning curve + uncertainty trend
 # 5. Save the trained model as a HuggingFace checkpoint
 conflibert_active_save(session, "my_al_model")
 ```
+
+![Learning curve and uncertainty trend](man/figures/active-learning-plot.png)
 
 `conflibert_active_label()` opens a modal dialog (or browser tab) with
 the queried texts + radio buttons per class — requires the `shiny` and
