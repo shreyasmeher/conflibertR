@@ -6,6 +6,8 @@ R interface to [ConfliBERT](https://github.com/eventdata/ConfliBERT), a pretrain
 
 **Training:** Fine-tune custom classifiers on your own data with any of 7 base models, and compare their performance side by side.
 
+**Active Learning:** Iteratively label an unlabeled pool by focusing on the most uncertain samples — with a built-in Shiny gadget for point-and-click labeling.
+
 ## Installation
 
 ```r
@@ -119,6 +121,9 @@ data <- conflibert_example("binary")
 # Multiclass: 4 event types (80 train / 20 dev / 20 test)
 data <- conflibert_example("multiclass")
 
+# Active learning: 20 labeled seed + 61 unlabeled pool + 20 dev
+data <- conflibert_example("active")
+
 data$train
 #> # A data.frame: 80 x 2
 #>   text                                                                    label
@@ -192,6 +197,61 @@ conflibert_models()
 #> [4] "RoBERTa Base"      "ModernBERT Base"   "DeBERTa v3 Base"
 #> [7] "DistilBERT Base"
 ```
+
+## Active Learning
+
+Labeling text is expensive. Active learning trains a model on a tiny
+labeled seed, then asks you to label only the *most uncertain* samples
+from an unlabeled pool — the ones a new label will help the model most.
+
+```r
+data <- conflibert_example("active")
+
+# 1. Train on the seed, get the first uncertain batch
+session <- conflibert_active_start(
+  seed       = data$seed,    # small labeled set
+  pool       = data$pool,    # unlabeled texts
+  dev        = data$dev,     # tracks metrics each round
+  strategy   = "entropy",    # or "margin" / "least_confidence"
+  query_size = 10
+)
+
+session
+#> Active learning session  (round 1)
+#>   Model: ConfliBERT  |  Task: binary  |  Strategy: entropy
+#>   Labeled: 20  |  Pool remaining: 51  |  Query size: 10
+
+session$query   # tibble: 10 texts + uncertainty scores
+
+# 2. Label the query — easiest route is the built-in Shiny gadget
+labels  <- conflibert_active_label(session)
+session <- conflibert_active_next(session, labels)
+
+# 3. Iterate until the pool is drained or metrics plateau
+while (!session$done) {
+  labels  <- conflibert_active_label(session)   # or your own vector
+  session <- conflibert_active_next(session, labels)
+}
+
+# 4. Inspect progress
+session$metrics            # tibble with per-round F1, accuracy, uncertainty, ...
+plot(session)              # two-panel: learning curve + uncertainty trend
+
+# 5. Save the trained model as a HuggingFace checkpoint
+conflibert_active_save(session, "my_al_model")
+```
+
+`conflibert_active_label()` opens a modal dialog (or browser tab) with
+the queried texts + radio buttons per class — requires the `shiny` and
+`miniUI` packages. If you'd rather label in code, just pass an integer
+vector in the same order as `session$query`:
+
+```r
+labels  <- c(1, 0, 1, 0, 0, 1, 0, 1, 0, 1)
+session <- conflibert_active_next(session, labels)
+```
+
+For a full walkthrough, see `vignette("active-learning", package = "conflibertR")`.
 
 ## How it works
 
