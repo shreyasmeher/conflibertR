@@ -407,3 +407,159 @@ def compare(
             torch.cuda.empty_cache()
 
     return results
+
+
+# =========================================================================
+# Active Learning
+# =========================================================================
+
+def al_train(
+    texts, labels, num_labels, model_name="ConfliBERT",
+    epochs=3, batch_size=8, lr=2e-5, max_seq_len=512,
+    dev_texts=None, dev_labels=None, task="binary",
+):
+    """Train one active-learning round on the given labeled data.
+
+    Returns a dict with keys: model, tokenizer, metrics, runtime.
+    The model/tokenizer are raw Python objects kept on CPU; callers are
+    expected to hold the reference across rounds.
+    """
+    from transformers import (
+        AutoTokenizer,
+        AutoModelForSequenceClassification,
+        TrainingArguments,
+        Trainer,
+    )
+
+    model_id = MODEL_MAP.get(model_name, model_name)
+    texts = list(texts)
+    labels = [int(l) for l in labels]
+    if task == "binary":
+        num_labels = 2
+    else:
+        num_labels = int(num_labels)
+
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    model = AutoModelForSequenceClassification.from_pretrained(
+        model_id, num_labels=num_labels,
+    )
+
+    train_ds = _Dataset(
+        tokenizer(texts, truncation=True, padding=True, max_length=int(max_seq_len)),
+        labels,
+    )
+    dev_ds = None
+    if dev_texts is not None and dev_labels is not None:
+        dev_ds = _Dataset(
+            tokenizer(
+                list(dev_texts), truncation=True, padding=True,
+                max_length=int(max_seq_len),
+            ),
+            [int(l) for l in dev_labels],
+        )
+
+    output_dir = tempfile.mkdtemp(prefix="conflibert_al_")
+    training_args = TrainingArguments(
+        output_dir=output_dir,
+        num_train_epochs=int(epochs),
+        per_device_train_batch_size=int(batch_size),
+        per_device_eval_batch_size=int(batch_size) * 2,
+        learning_rate=float(lr),
+        weight_decay=0.01,
+        warmup_ratio=0.1,
+        eval_strategy="epoch" if dev_ds is not None else "no",
+        save_strategy="no",
+        logging_steps=50,
+        report_to="none",
+        seed=42,
+    )
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_ds,
+        eval_dataset=dev_ds,
+        compute_metrics=_make_metrics_fn(task) if dev_ds is not None else None,
+    )
+    train_result = trainer.train()
+
+    metrics = {}
+    if dev_ds is not None:
+        eval_results = trainer.evaluate()
+        for k, v in eval_results.items():
+            if isinstance(v, (int, float, np.floating)) and "epoch" not in k:
+                metrics[k.replace("eval_", "")] = round(float(v), 4)
+
+    runtime = round(train_result.metrics.get("train_runtime", 0), 1)
+
+    trained = trainer.model
+    try:
+        trained = trained.cpu()
+    except Exception:
+        pass
+    trained.eval()
+
+    return {
+        "model": trained,
+        "tokenizer": tokenizer,
+        "metrics": metrics,
+        "runtime": runtime,
+    }
+
+
+def al_score(
+    model, tokenizer, texts, strategy="entropy",
+    max_seq_len=512, batch_size=32,
+):
+    """Compute uncertainty scores for unlabeled texts. Higher = more uncertain.
+
+    Strategies: 'entropy', 'margin', 'least_confidence'.
+    Returns a list of floats, one per input text.
+    """
+    texts = list(texts)
+    if not texts:
+        return []
+
+    device = _get_device()
+    model = model.to(device)
+    model.eval()
+
+    scores = []
+    for i in range(0, len(texts), int(batch_size)):
+        batch = texts[i:i + int(batch_size)]
+        inputs = tokenizer(
+            batch, return_tensors="pt", truncation=True,
+            padding=True, max_length=int(max_seq_len),
+        )
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+        with torch.no_grad():
+            logits = model(**inputs).logits
+        probs = torch.softmax(logits, dim=1).cpu().numpy()
+
+        if strategy == "entropy":
+            s = -np.sum(probs * np.log(probs + 1e-10), axis=1)
+        elif strategy == "margin":
+            sorted_p = np.sort(probs, axis=1)
+            s = -(sorted_p[:, -1] - sorted_p[:, -2])
+        elif strategy == "least_confidence":
+            s = -np.max(probs, axis=1)
+        else:
+            raise ValueError(
+                f"Unknown strategy '{strategy}'. "
+                "Use 'entropy', 'margin', or 'least_confidence'."
+            )
+        scores.extend([float(x) for x in s])
+
+    try:
+        model.cpu()
+    except Exception:
+        pass
+    return scores
+
+
+def al_save(model, tokenizer, save_dir):
+    """Save the active-learning model and tokenizer to save_dir."""
+    os.makedirs(save_dir, exist_ok=True)
+    model.save_pretrained(save_dir)
+    tokenizer.save_pretrained(save_dir)
+    return save_dir
