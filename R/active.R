@@ -27,11 +27,21 @@
 #'   \code{"binary"}.
 #' @param strategy Uncertainty strategy: \code{"entropy"} (default),
 #'   \code{"margin"}, or \code{"least_confidence"}.
+#' @param diverse If \code{TRUE}, cluster the top-scoring candidates in
+#'   embedding space and pick the highest-scoring sample from each
+#'   cluster. Prevents near-duplicates from dominating a batch.
+#'   Default: \code{FALSE}.
+#' @param diversity_candidates How many top-scoring candidates to
+#'   cluster when \code{diverse = TRUE}. Default: \code{3 * query_size}.
 #' @param query_size Samples queried per round. Default: 10.
 #' @param epochs Training epochs per round. Default: 3.
 #' @param batch_size Training batch size. Default: 8.
 #' @param lr Learning rate. Default: 2e-5.
 #' @param max_seq_len Max token sequence length. Default: 512.
+#' @param use_lora If \code{TRUE}, train each round with a LoRA adapter
+#'   (parameter-efficient). Default: \code{FALSE}.
+#' @param lora_rank LoRA rank. Default: 8.
+#' @param lora_alpha LoRA alpha. Default: 16.
 #' @return An object of class \code{"conflibert_al_session"}: a list
 #'   with \code{query} (tibble of texts to label), \code{metrics}
 #'   (tibble of metrics across rounds), \code{round}, \code{labeled_n},
@@ -55,8 +65,10 @@ conflibert_active_start <- function(
     seed, pool, dev = NULL,
     model = "ConfliBERT", task = c("binary", "multiclass"),
     strategy = c("entropy", "margin", "least_confidence"),
+    diverse = FALSE, diversity_candidates = NULL,
     query_size = 10,
-    epochs = 3, batch_size = 8, lr = 2e-5, max_seq_len = 512
+    epochs = 3, batch_size = 8, lr = 2e-5, max_seq_len = 512,
+    use_lora = FALSE, lora_rank = 8, lora_alpha = 16
 ) {
   task <- match.arg(task)
   strategy <- match.arg(strategy)
@@ -89,14 +101,22 @@ conflibert_active_start <- function(
     max_seq_len = as.integer(max_seq_len),
     dev_texts   = dev_texts,
     dev_labels  = dev_labels,
-    task        = task
+    task        = task,
+    use_lora    = isTRUE(use_lora),
+    lora_rank   = as.integer(lora_rank),
+    lora_alpha  = as.integer(lora_alpha)
   )
+
+  dc <- if (is.null(diversity_candidates)) {
+    3L * as.integer(query_size)
+  } else as.integer(diversity_candidates)
 
   query <- .al_pick_query(
     py, trained, pool_texts,
     available_idx = seq_along(pool_texts),
     strategy = strategy, query_size = query_size,
-    max_seq_len = max_seq_len
+    max_seq_len = max_seq_len,
+    diverse = isTRUE(diverse), diversity_candidates = dc
   )
   round_metrics <- .al_round_row(
     0L, length(seed_texts), trained$metrics, query$tibble$uncertainty
@@ -122,9 +142,13 @@ conflibert_active_start <- function(
       num_labels      = num_labels,
       params = list(
         model = model, task = task, strategy = strategy,
+        diverse = isTRUE(diverse), diversity_candidates = dc,
         query_size = query_size, epochs = as.integer(epochs),
         batch_size = as.integer(batch_size), lr = as.numeric(lr),
-        max_seq_len = as.integer(max_seq_len)
+        max_seq_len = as.integer(max_seq_len),
+        use_lora = isTRUE(use_lora),
+        lora_rank = as.integer(lora_rank),
+        lora_alpha = as.integer(lora_alpha)
       )
     )
   )
@@ -196,7 +220,10 @@ conflibert_active_next <- function(session, labels) {
     max_seq_len = p$max_seq_len,
     dev_texts   = st$dev_texts,
     dev_labels  = st$dev_labels,
-    task        = p$task
+    task        = p$task,
+    use_lora    = isTRUE(p$use_lora),
+    lora_rank   = as.integer(p$lora_rank),
+    lora_alpha  = as.integer(p$lora_alpha)
   )
 
   if (length(st$pool_available) == 0L) {
@@ -220,7 +247,9 @@ conflibert_active_next <- function(session, labels) {
     py, trained, st$pool_texts,
     available_idx = st$pool_available,
     strategy = p$strategy, query_size = p$query_size,
-    max_seq_len = p$max_seq_len
+    max_seq_len = p$max_seq_len,
+    diverse = isTRUE(p$diverse),
+    diversity_candidates = as.integer(p$diversity_candidates)
   )
   round_row <- .al_round_row(
     session$round, length(st$labeled_texts), trained$metrics,
@@ -596,7 +625,8 @@ plot.conflibert_al_session <- function(
 }
 
 .al_pick_query <- function(py, trained, pool_texts, available_idx,
-                            strategy, query_size, max_seq_len) {
+                            strategy, query_size, max_seq_len,
+                            diverse = FALSE, diversity_candidates = NULL) {
   available_idx <- as.integer(available_idx)
   texts_sub <- pool_texts[available_idx]
   scores <- unlist(py$al_score(
@@ -606,8 +636,17 @@ plot.conflibert_al_session <- function(
     strategy = strategy,
     max_seq_len = as.integer(max_seq_len)
   ))
+
   k <- min(as.integer(query_size), length(texts_sub))
-  top_local <- order(scores, decreasing = TRUE)[seq_len(k)]
+  top_local <- if (!isTRUE(diverse) || k >= length(texts_sub)) {
+    order(scores, decreasing = TRUE)[seq_len(k)]
+  } else {
+    .al_pick_diverse(
+      py, trained, texts_sub, scores, k,
+      as.integer(diversity_candidates), as.integer(max_seq_len)
+    )
+  }
+
   top_idx <- available_idx[top_local]
   list(
     indices = top_idx,
@@ -616,4 +655,53 @@ plot.conflibert_al_session <- function(
       uncertainty = round(as.numeric(scores[top_local]), 4)
     )
   )
+}
+
+
+.al_pick_diverse <- function(py, trained, texts_sub, scores, k,
+                              diversity_candidates, max_seq_len) {
+  n_cand <- min(max(diversity_candidates, k), length(texts_sub))
+  cand_local <- order(scores, decreasing = TRUE)[seq_len(n_cand)]
+  if (n_cand == k) return(cand_local)
+
+  emb <- tryCatch(
+    py$al_embed(
+      model = trained$model,
+      tokenizer = trained$tokenizer,
+      texts = texts_sub[cand_local],
+      max_seq_len = max_seq_len
+    ),
+    error = function(e) NULL
+  )
+  if (is.null(emb)) {
+    warning("Embedding step failed; falling back to top-uncertainty picks.",
+            call. = FALSE)
+    return(cand_local[seq_len(k)])
+  }
+  if (!is.matrix(emb)) emb <- as.matrix(emb)
+  if (nrow(emb) < k) return(cand_local[seq_len(nrow(emb))])
+
+  km <- tryCatch(
+    stats::kmeans(emb, centers = k, nstart = 5, iter.max = 50),
+    error = function(e) NULL
+  )
+  if (is.null(km)) {
+    warning("k-means failed; falling back to top-uncertainty picks.",
+            call. = FALSE)
+    return(cand_local[seq_len(k)])
+  }
+
+  clus_local <- vapply(seq_len(k), function(j) {
+    idx <- which(km$cluster == j)
+    if (length(idx) == 0L) return(NA_integer_)
+    idx[which.max(scores[cand_local[idx]])]
+  }, integer(1))
+
+  # replace any empty-cluster NAs with the next-best top-scorers
+  if (anyNA(clus_local)) {
+    used <- clus_local[!is.na(clus_local)]
+    fill <- setdiff(seq_along(cand_local), used)[seq_len(sum(is.na(clus_local)))]
+    clus_local[is.na(clus_local)] <- fill
+  }
+  cand_local[clus_local]
 }

@@ -1,3 +1,9 @@
+# conflibertR 0.4.0
+
+- Added `conflibert_load()` to load a saved fine-tuned classifier from disk, and a `predict()` method that runs batched inference returning a tidy tibble.
+- Added LoRA (parameter-efficient) fine-tuning. Pass `use_lora = TRUE` to `conflibert_finetune()`, `conflibert_compare()`, or `conflibert_active_start()` to train with a low-rank adapter; the adapter is merged into the base model before saving so reloads are transparent. `peft` added to the Python install list.
+- Added diversity-aware active learning. Pass `diverse = TRUE` to `conflibert_active_start()` to cluster top-scoring candidates in embedding space and pick one per cluster, preventing near-duplicates from dominating a batch.
+
 # conflibertR 0.3.1
 
 - Added `conflibert_active_label()`: opens a Shiny gadget for labeling the current query, matching the GUI's point-and-click experience. Requires `shiny` and `miniUI` (Suggests).

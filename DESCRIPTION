@@ -1,6 +1,6 @@
 Package: conflibertR
 Title: ConfliBERT Inference and Fine-Tuning for Conflict and Political Violence Text
-Version: 0.3.1
+Version: 0.4.0
 Authors@R: person("Shreyas", "Meher", email = "shreyasmeher@gmail.com",
     role = c("aut", "cre"))
 Description: R interface to ConfliBERT, a pretrained language model for

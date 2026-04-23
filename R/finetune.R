@@ -17,7 +17,14 @@
 #' @param batch_size Training batch size. Default: 8.
 #' @param lr Learning rate. Default: 2e-5.
 #' @param save_dir Optional directory to save the trained model. If provided,
-#'   the model and tokenizer are saved there and can be loaded later.
+#'   the model and tokenizer are saved there and can be loaded later with
+#'   \code{\link{conflibert_load}}.
+#' @param use_lora If \code{TRUE}, fine-tune with a LoRA adapter
+#'   (parameter-efficient; cuts GPU memory \~5x). The adapter is merged
+#'   into the base model before saving, so loading is the same as for
+#'   full fine-tuning. Default: \code{FALSE}.
+#' @param lora_rank LoRA rank. Default: 8.
+#' @param lora_alpha LoRA alpha. Default: 16.
 #' @return A list with:
 #'   \describe{
 #'     \item{metrics}{Tibble of test-set metrics.}
@@ -42,7 +49,8 @@ conflibert_finetune <- function(
     train, dev, test,
     model = "ConfliBERT", task = "binary",
     epochs = 3, batch_size = 8, lr = 2e-5,
-    save_dir = NULL
+    save_dir = NULL,
+    use_lora = FALSE, lora_rank = 8, lora_alpha = 16
 ) {
   stopifnot(
     is.data.frame(train), "text" %in% names(train), "label" %in% names(train),
@@ -63,7 +71,10 @@ conflibert_finetune <- function(
     epochs       = as.integer(epochs),
     batch_size   = as.integer(batch_size),
     lr           = as.numeric(lr),
-    save_dir     = save_dir
+    save_dir     = save_dir,
+    use_lora     = isTRUE(use_lora),
+    lora_rank    = as.integer(lora_rank),
+    lora_alpha   = as.integer(lora_alpha)
   )
 
   metrics_df <- tibble::as_tibble(as.data.frame(r$metrics))
@@ -108,7 +119,8 @@ conflibert_compare <- function(
     train, dev, test,
     models = c("ConfliBERT", "BERT Base Uncased"),
     task = "binary",
-    epochs = 3, batch_size = 8, lr = 2e-5
+    epochs = 3, batch_size = 8, lr = 2e-5,
+    use_lora = FALSE, lora_rank = 8, lora_alpha = 16
 ) {
   stopifnot(
     is.data.frame(train), is.data.frame(dev), is.data.frame(test),
@@ -127,7 +139,10 @@ conflibert_compare <- function(
     task         = task,
     epochs       = as.integer(epochs),
     batch_size   = as.integer(batch_size),
-    lr           = as.numeric(lr)
+    lr           = as.numeric(lr),
+    use_lora     = isTRUE(use_lora),
+    lora_rank    = as.integer(lora_rank),
+    lora_alpha   = as.integer(lora_alpha)
   )
 
   rows <- lapply(results, function(r) tibble::as_tibble(as.data.frame(r)))
