@@ -1,0 +1,152 @@
+---
+title: "Active Learning with conflibertR"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Active Learning with conflibertR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+Labeling text is expensive. Active learning lets you focus annotation
+effort on the examples a model is *most uncertain* about, so each label
+has maximum impact on performance. `conflibertR` exposes this as a
+small, intuitive loop:
+
+1. Start from a tiny labeled seed and an unlabeled pool.
+2. Train a model on the seed; the package hands back the most uncertain
+   samples from the pool.
+3. Label those samples, submit them, and the model retrains and picks
+   the next uncertain batch.
+4. Repeat until the pool is exhausted or metrics plateau.
+5. Save the final model as a HuggingFace checkpoint.
+
+```{r}
+library(conflibertR)
+```
+
+## Example data
+
+The package bundles a small demo dataset: a 20-text labeled seed, a
+61-text unlabeled pool, and a dev set. It also includes oracle labels
+for the pool so you can simulate a full loop without a human in the
+loop (for testing only — don't use the oracle in real workflows).
+
+```{r}
+data <- conflibert_example("active")
+
+nrow(data$seed)      # 20 labeled seed texts
+length(data$pool)    # 61 unlabeled pool texts
+nrow(data$dev)       # 20 dev texts
+length(data$pool_labels)  # oracle labels (for simulation)
+```
+
+## Starting a session
+
+`conflibert_active_start()` trains a classifier on the seed and returns
+a session object containing the first uncertain batch. Each round, pass
+the session to `conflibert_active_next()` along with your labels.
+
+```{r}
+session <- conflibert_active_start(
+  seed       = data$seed,
+  pool       = data$pool,
+  dev        = data$dev,
+  model      = "ConfliBERT",
+  task       = "binary",
+  strategy   = "entropy",   # or "margin", "least_confidence"
+  query_size = 10,
+  epochs     = 1
+)
+
+session
+```
+
+The session's `$query` is a tibble of texts to label next, with an
+`uncertainty` column showing how unsure the model is. `$metrics` tracks
+scores across rounds; `$labeled_n` / `$pool_n` track progress.
+
+## Labeling and iterating
+
+In a real workflow you'd hand `session$query$text` to a human and
+collect the labels. For this demo we use the bundled oracle:
+
+```{r}
+labels <- unname(data$pool_labels[session$query$text])
+
+session <- conflibert_active_next(session, labels = labels)
+session
+```
+
+Repeat until the pool is exhausted or the learning curve flattens.
+Here's a short simulation loop:
+
+```{r}
+for (round in 2:5) {
+  if (session$done) break
+  labels  <- unname(data$pool_labels[session$query$text])
+  session <- conflibert_active_next(session, labels = labels)
+}
+
+session$metrics
+```
+
+## Visualizing progress
+
+`plot()` produces a two-panel diagnostic: the learning curve on top
+(metrics vs labeled-set size) and the query uncertainty trend on the
+bottom. When mean uncertainty flattens, the model is no longer finding
+informative samples — a good signal to stop.
+
+```{r}
+plot(session)
+
+# or a single panel:
+plot(session, which = "metrics")
+plot(session, which = "uncertainty")
+```
+
+## Query strategies
+
+Three uncertainty strategies are available. Pass one via `strategy`:
+
+- `"entropy"` (default) — highest Shannon entropy of the predicted
+  class distribution. Works well for both binary and multiclass.
+- `"margin"` — smallest gap between the top two class probabilities.
+  Targets ambiguous samples on the decision boundary.
+- `"least_confidence"` — lowest maximum class probability. Simplest
+  strategy; a good baseline.
+
+## Saving the model
+
+Persist the final model as a standard HuggingFace checkpoint:
+
+```{r}
+conflibert_active_save(session, "my_al_model")
+```
+
+You can reload it with any `transformers` tool, or point
+`AutoModelForSequenceClassification.from_pretrained()` at the directory
+from Python.
+
+## Tips
+
+- **Start small.** A seed of 10–50 texts is often enough; active
+  learning shines when the pool is much larger than the labeled set.
+- **Watch uncertainty trends, not just metrics.** If dev metrics are
+  noisy on small sets, the uncertainty panel often tells a clearer
+  story about whether the model is still learning.
+- **Parameters carry across rounds.** The model, task, strategy,
+  query size, and training hyperparameters are fixed when you call
+  `conflibert_active_start()` and reused for every subsequent round.
+- **Sessions are in-memory.** The trained model lives inside the
+  session object as a Python handle. Calling `saveRDS()` on the
+  session won't serialize the model — use `conflibert_active_save()`
+  to persist it, and re-run rounds from a fresh session if needed.
