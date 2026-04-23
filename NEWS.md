@@ -1,3 +1,7 @@
+# conflibertR 0.3.1
+
+- Added `conflibert_active_label()`: opens a Shiny gadget for labeling the current query, matching the GUI's point-and-click experience. Requires `shiny` and `miniUI` (Suggests).
+
 # conflibertR 0.3.0
 
 - Added an active-learning workflow for efficient labeling of unlabeled pools.

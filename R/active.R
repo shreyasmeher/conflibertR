@@ -244,6 +244,156 @@ conflibert_active_next <- function(session, labels) {
 }
 
 
+#' Label the Current Query Interactively
+#'
+#' Opens a small Shiny gadget that shows each text in
+#' \code{session$query} alongside radio buttons for each class. Click
+#' Done to submit; the labels are returned as an integer vector ready
+#' to pass to \code{\link{conflibert_active_next}}.
+#'
+#' Requires the \pkg{shiny} and \pkg{miniUI} packages. In RStudio the
+#' gadget opens as a modal dialog; elsewhere it opens in your browser.
+#'
+#' @param session A \code{conflibert_al_session} object with a
+#'   non-empty \code{query}.
+#' @param classes Optional named integer vector mapping display names
+#'   to class values, e.g. \code{c("non-conflict" = 0, "conflict" = 1)}.
+#'   If omitted, classes are inferred from the session.
+#' @return An integer vector of labels (one per query row), or
+#'   \code{NULL} if the user cancels.
+#' @export
+#' @examples
+#' \dontrun{
+#' labels  <- conflibert_active_label(session)
+#' session <- conflibert_active_next(session, labels)
+#' }
+conflibert_active_label <- function(session, classes = NULL) {
+  stopifnot(inherits(session, "conflibert_al_session"))
+  if (isTRUE(session$done) || nrow(session$query) == 0L) {
+    stop("No samples to label in this session.", call. = FALSE)
+  }
+  if (!requireNamespace("shiny", quietly = TRUE) ||
+      !requireNamespace("miniUI", quietly = TRUE)) {
+    stop(
+      "The interactive labeler needs the shiny and miniUI packages:\n",
+      "  install.packages(c(\"shiny\", \"miniUI\"))",
+      call. = FALSE
+    )
+  }
+
+  nl <- session$.state$num_labels
+  if (is.null(classes)) {
+    classes <- stats::setNames(seq_len(nl) - 1L, as.character(seq_len(nl) - 1L))
+  }
+  if (anyDuplicated(as.integer(classes)) ||
+      any(is.na(match(seq_len(nl) - 1L, as.integer(classes))))) {
+    stop(sprintf("`classes` must cover integers 0..%d.", nl - 1L), call. = FALSE)
+  }
+  class_values <- as.character(as.integer(classes))
+  class_labels <- names(classes)
+
+  query <- session$query
+  n <- nrow(query)
+  is_binary <- session$.state$params$task == "binary"
+
+  ui <- miniUI::miniPage(
+    miniUI::gadgetTitleBar(
+      sprintf("Label %d samples (round %d)", n, session$round),
+      right = miniUI::miniTitleBarButton("done", "Submit", primary = TRUE)
+    ),
+    shiny::tags$head(shiny::tags$style(shiny::HTML("
+      .al-row { padding: 10px 14px; border-bottom: 1px solid #e5e7eb; }
+      .al-row:hover { background: #f9fafb; }
+      .al-idx { color: #9ca3af; font-weight: 600; min-width: 32px; }
+      .al-text { font-size: 14px; line-height: 1.4; }
+      .al-meta { color: #9ca3af; font-size: 11px; margin-top: 2px; }
+      .al-progress { padding: 8px 14px; background: #f3f4f6;
+                     border-bottom: 1px solid #e5e7eb;
+                     font-size: 13px; color: #374151; position: sticky;
+                     top: 0; z-index: 10; }
+      .shiny-options-group { margin-top: 4px; }
+    "))),
+    miniUI::miniContentPanel(
+      padding = 0,
+      shiny::div(class = "al-progress", shiny::textOutput("progress", inline = TRUE)),
+      shiny::uiOutput("rows")
+    )
+  )
+
+  server <- function(input, output, sess) {
+    get_labels <- function() {
+      vapply(seq_len(n), function(i) {
+        v <- input[[paste0("lbl_", i)]]
+        if (is.null(v) || !nzchar(v)) NA_integer_ else as.integer(v)
+      }, integer(1))
+    }
+
+    output$progress <- shiny::renderText({
+      labs <- get_labels()
+      done_n <- sum(!is.na(labs))
+      sprintf("Labeled %d of %d  —  Click Submit when every row has a choice.",
+              done_n, n)
+    })
+
+    output$rows <- shiny::renderUI({
+      rows <- lapply(seq_len(n), function(i) {
+        shiny::div(
+          class = "al-row",
+          shiny::fluidRow(
+            shiny::column(
+              8,
+              shiny::div(
+                style = "display: flex; gap: 10px;",
+                shiny::span(class = "al-idx", paste0(i, ".")),
+                shiny::div(
+                  shiny::div(class = "al-text", query$text[i]),
+                  shiny::div(class = "al-meta",
+                             sprintf("uncertainty: %.3f", query$uncertainty[i]))
+                )
+              )
+            ),
+            shiny::column(
+              4,
+              shiny::radioButtons(
+                inputId = paste0("lbl_", i),
+                label = NULL,
+                choiceNames = class_labels,
+                choiceValues = class_values,
+                selected = character(0),
+                inline = is_binary
+              )
+            )
+          )
+        )
+      })
+      do.call(shiny::tagList, rows)
+    })
+
+    shiny::observeEvent(input$done, {
+      labs <- get_labels()
+      if (anyNA(labs)) {
+        shiny::showNotification(
+          sprintf("%d rows still unlabeled.", sum(is.na(labs))),
+          type = "warning", duration = 3
+        )
+        return()
+      }
+      shiny::stopApp(labs)
+    })
+
+    shiny::observeEvent(input$cancel, shiny::stopApp(NULL))
+  }
+
+  viewer <- if (requireNamespace("rstudioapi", quietly = TRUE) &&
+                rstudioapi::isAvailable()) {
+    shiny::dialogViewer("Active Learning Labeler", width = 900, height = 700)
+  } else {
+    shiny::browserViewer()
+  }
+  shiny::runGadget(ui, server, viewer = viewer)
+}
+
+
 #' Save the Active Learning Model
 #'
 #' Write the current session's model and tokenizer to disk. The result
