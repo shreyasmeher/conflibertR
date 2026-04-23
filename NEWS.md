@@ -1,3 +1,13 @@
+# conflibertR 0.3.0
+
+- Added an active-learning workflow for efficient labeling of unlabeled pools.
+- `conflibert_active_start()`: train on a labeled seed and return the most uncertain samples from a pool.
+- `conflibert_active_next()`: submit labels for the current query, retrain, and get the next batch.
+- `conflibert_active_save()`: persist the active-learning model as a HuggingFace checkpoint.
+- Session objects have `print()` and `plot()` methods for quick inspection and tracking metrics across rounds.
+- Three query strategies supported: `entropy`, `margin`, `least_confidence`.
+- Bundled active-learning example dataset available via `conflibert_example("active")`.
+
 # conflibertR 0.2.0
 
 - Added `conflibert_finetune()` for training custom classifiers on user data.
