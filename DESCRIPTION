@@ -1,6 +1,6 @@
 Package: conflibertR
 Title: ConfliBERT Inference and Fine-Tuning for Conflict and Political Violence Text
-Version: 0.3.0
+Version: 0.3.1
 Authors@R: person("Shreyas", "Meher", email = "shreyasmeher@gmail.com",
     role = c("aut", "cre"))
 Description: R interface to ConfliBERT, a pretrained language model for
@@ -22,7 +22,10 @@ Imports:
     tibble
 Suggests:
     knitr,
+    miniUI,
     rmarkdown,
+    rstudioapi,
+    shiny,
     testthat (>= 3.0.0)
 VignetteBuilder: knitr
 Config/testthat/edition: 3

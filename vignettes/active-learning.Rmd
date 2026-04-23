@@ -75,12 +75,28 @@ scores across rounds; `$labeled_n` / `$pool_n` track progress.
 
 ## Labeling and iterating
 
-In a real workflow you'd hand `session$query$text` to a human and
-collect the labels. For this demo we use the bundled oracle:
+For real labeling, the easiest route is the built-in Shiny gadget. It
+opens a modal dialog (or browser tab) showing every row of the current
+query with radio buttons for each class — click, submit, done.
 
 ```{r}
-labels <- unname(data$pool_labels[session$query$text])
+labels  <- conflibert_active_label(session)
+session <- conflibert_active_next(session, labels = labels)
+```
 
+You can also provide the labels by hand (useful for scripting, or if
+you prefer a console-only workflow):
+
+```{r}
+# labels in the same order as session$query
+labels  <- c(1, 0, 1, 0, 0, 1, 0, 1, 0, 1)
+session <- conflibert_active_next(session, labels = labels)
+```
+
+For this vignette we use the bundled oracle to simulate labeling:
+
+```{r}
+labels  <- unname(data$pool_labels[session$query$text])
 session <- conflibert_active_next(session, labels = labels)
 session
 ```
