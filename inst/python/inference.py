@@ -77,12 +77,16 @@ def ner(text):
     Returns a list of dicts with 'entity' and 'label' keys.
     """
     model, tokenizer = _load("ner")
+    device = _get_device()
     inputs = tokenizer(text, return_tensors="pt", truncation=True)
+    inputs = {k: v.to(device) for k, v in inputs.items()}
     with torch.no_grad():
         outputs = model(**inputs)
 
-    tag_ids = outputs.logits.argmax(dim=2).squeeze().tolist()
-    tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"].squeeze().tolist())
+    tag_ids = outputs.logits.argmax(dim=2).squeeze().cpu().tolist()
+    tokens = tokenizer.convert_ids_to_tokens(
+        inputs["input_ids"].squeeze().cpu().tolist()
+    )
 
     entities = []
     current_words = []
