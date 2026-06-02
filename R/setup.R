@@ -20,7 +20,7 @@
 #' conflibert_install(method = "virtualenv")
 #' }
 conflibert_install <- function(envname = "conflibert", method = "auto") {
-  packages <- c("torch", "transformers>=4.40,<5", "accelerate", "peft",
+  packages <- c("torch", "transformers>=4.40,<4.50", "accelerate", "peft",
                  "scikit-learn", "tensorflow", "tf-keras")
 
   # Auto-detect: use conda if available, otherwise virtualenv
