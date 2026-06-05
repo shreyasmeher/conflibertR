@@ -21,6 +21,8 @@ devtools::install_github("shreyasmeher/conflibertR")
 
 Install the Python dependencies (torch, transformers, tensorflow). Conda is recommended as it handles torch compatibility better across platforms:
 
+Note: The QA function uses `TFAutoModelForQuestionAnswering`. This is not available in `transformers` 4.50+, so use `transformers>=4.40,<4.50`.
+
 ```r
 library(conflibertR)
 
