@@ -15,7 +15,7 @@
 #'     \item{\code{"active"}}{small labeled seed and an unlabeled pool for
 #'       demoing \code{\link{conflibert_active_start}}. Returns
 #'       \code{$seed}, \code{$pool}, \code{$dev}, and
-#'       \code{$pool_labels} — a named integer vector mapping each
+#'       \code{$pool_labels}, a named integer vector mapping each
 #'       pool text to its true label (for simulation / automated
 #'       testing only; do not use these in a real workflow).}
 #'   }

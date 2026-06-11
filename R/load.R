@@ -89,9 +89,11 @@ predict.conflibert_classifier <- function(
 
 #' @export
 print.conflibert_classifier <- function(x, ...) {
-  cat("conflibert_classifier\n")
-  cat("  Source:  ", x$dir, "\n", sep = "")
-  cat("  Classes: ", x$num_labels, "\n", sep = "")
-  cat("\nUse predict(model, text) to classify new texts.\n")
+  cli::cat_rule(left = cli::style_bold("ConfliBERT classifier"))
+  cli::cat_line("Source:  ", cli::col_blue(x$dir))
+  cli::cat_line("Classes: ", x$num_labels)
+  cli::cat_line(cli::col_grey(
+    "# predict(model, text) to classify new texts"
+  ))
   invisible(x)
 }

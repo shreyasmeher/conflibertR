@@ -1,10 +1,11 @@
 #' Binary Classification
 #'
 #' Classify text as conflict-related (Positive) or not (Negative) using
-#' the pretrained ConfliBERT binary classifier.
+#' the pretrained ConfliBERT binary classifier. Inference is batched, so
+#' long vectors are fast; a progress bar appears for large inputs.
 #'
 #' @param text A character vector of one or more texts.
-#' @return A tibble with columns:
+#' @return A tibble (with a themed print method) with columns:
 #'   \describe{
 #'     \item{text}{The input text.}
 #'     \item{label}{"Positive" or "Negative".}
@@ -26,19 +27,20 @@
 conflibert_classify <- function(text) {
   stopifnot(is.character(text), length(text) >= 1)
   py <- .get_py()
+  .cb_announce_load("classify", "binary classification")
 
-  parts <- lapply(text, function(t) {
-    r <- py$classify(t)
-    tibble::tibble(
-      text         = t,
-      label        = r$label,
-      class        = as.integer(r[["class"]]),
-      confidence   = r$confidence,
-      prob_negative = r$prob_negative,
-      prob_positive = r$prob_positive
-    )
-  })
-  do.call(rbind, parts)
+  chunks <- .cb_chunked(
+    text, function(ts) py$classify_batch(as.list(ts)), "Classifying"
+  )
+  out <- tibble::tibble(
+    text          = text,
+    label         = as.character(.cb_col(chunks, "label")),
+    class         = as.integer(.cb_col(chunks, "class")),
+    confidence    = as.numeric(.cb_col(chunks, "confidence")),
+    prob_negative = as.numeric(.cb_col(chunks, "prob_negative")),
+    prob_positive = as.numeric(.cb_col(chunks, "prob_positive"))
+  )
+  .cb_result(out, "conflibert_classify")
 }
 
 
@@ -46,10 +48,10 @@ conflibert_classify <- function(text) {
 #'
 #' Score text against four event categories: Armed Assault,
 #' Bombing or Explosion, Kidnapping, and Other. Each category is
-#' scored independently.
+#' scored independently. Inference is batched.
 #'
 #' @param text A character vector of one or more texts.
-#' @return A tibble with columns:
+#' @return A tibble (with themed print and plot methods) with columns:
 #'   \describe{
 #'     \item{doc_id}{Integer index of the input text
 #'       (only when \code{length(text) > 1}).}
@@ -66,19 +68,27 @@ conflibert_classify <- function(text) {
 conflibert_multilabel <- function(text) {
   stopifnot(is.character(text), length(text) >= 1)
   py <- .get_py()
+  .cb_announce_load("multilabel", "multilabel classification")
 
-  parts <- lapply(seq_along(text), function(i) {
-    r <- py$multilabel(text[i])
-    tibble::tibble(
-      doc_id      = i,
-      text        = text[i],
-      label       = vapply(r, function(x) x$label, character(1)),
-      probability = vapply(r, function(x) x$probability, numeric(1)),
-      predicted   = vapply(r, function(x) x$predicted, logical(1))
-    )
-  })
+  chunks <- .cb_chunked(
+    text, function(ts) py$multilabel_batch(as.list(ts)), "Scoring"
+  )
+  categories <- as.character(chunks[[1]]$categories)
+  probs <- do.call(rbind, lapply(chunks, function(r) {
+    p <- r$probabilities
+    if (is.matrix(p)) p else do.call(rbind, lapply(p, as.numeric))
+  }))
 
-  result <- do.call(rbind, parts)
+  k <- length(categories)
+  n <- length(text)
+  prob_vec <- as.numeric(t(probs))
+  result <- tibble::tibble(
+    doc_id      = rep(seq_len(n), each = k),
+    text        = rep(text, each = k),
+    label       = rep(categories, times = n),
+    probability = prob_vec,
+    predicted   = prob_vec >= 0.5
+  )
   if (length(text) == 1) result$doc_id <- NULL
-  result
+  .cb_result(result, "conflibert_multilabel")
 }

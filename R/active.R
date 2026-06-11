@@ -360,7 +360,7 @@ conflibert_active_label <- function(session, classes = NULL) {
     output$progress <- shiny::renderText({
       labs <- get_labels()
       done_n <- sum(!is.na(labs))
-      sprintf("Labeled %d of %d  —  Click Submit when every row has a choice.",
+      sprintf("Labeled %d of %d. Click Submit when every row has a choice.",
               done_n, n)
     })
 
@@ -452,36 +452,58 @@ conflibert_active_save <- function(session, dir) {
 
 #' @export
 print.conflibert_al_session <- function(x, n = 5, ...) {
-  header <- if (isTRUE(x$done)) {
-    sprintf("Active learning session  (complete, %d rounds)", x$round - 1L)
+  right <- if (isTRUE(x$done)) {
+    sprintf("complete, %d rounds", x$round - 1L)
   } else {
-    sprintf("Active learning session  (round %d)", x$round)
+    sprintf("round %d", x$round)
   }
-  cat(header, "\n", sep = "")
+  cli::cat_rule(
+    left = cli::style_bold("Active learning session"), right = right
+  )
   p <- x$.state$params
-  cat(sprintf(
-    "  Model: %s  |  Task: %s  |  Strategy: %s\n",
-    p$model, p$task, p$strategy
+  cli::cat_line(sprintf(
+    "Model: %s  |  Task: %s  |  Strategy: %s",
+    cli::col_blue(p$model), cli::col_blue(p$task), cli::col_blue(p$strategy)
   ))
-  cat(sprintf(
-    "  Labeled: %d  |  Pool remaining: %d  |  Query size: %d\n",
+  cli::cat_line(sprintf(
+    "Labeled: %d  |  Pool remaining: %d  |  Query size: %d",
     x$labeled_n, x$pool_n, p$query_size
   ))
 
   if (nrow(x$metrics) > 0L) {
-    cat("\nMetrics by round:\n")
-    print(x$metrics, n = Inf)
+    cli::cat_line()
+    cli::cat_line(cli::style_bold("Metrics by round:"))
+    print(tibble::as_tibble(x$metrics), n = Inf)
   }
 
   if (!isTRUE(x$done) && nrow(x$query) > 0L) {
-    cat(sprintf(
-      "\nCurrent query (%d samples, showing %d):\n",
-      nrow(x$query), min(n, nrow(x$query))
+    cli::cat_line()
+    cli::cat_line(cli::style_bold(sprintf(
+      "Current query (%d %s, showing %d):",
+      nrow(x$query), .cb_plural(nrow(x$query), "sample"),
+      min(n, nrow(x$query))
+    )))
+    width <- cli::console_width()
+    show <- utils::head(x$query, n)
+    for (i in seq_len(nrow(show))) {
+      cat(sprintf(
+        "%3d. %s %s\n", i,
+        cli::col_grey(sprintf("[%.3f]", show$uncertainty[i])),
+        .cb_trim(show$text[i], width - 14L)
+      ))
+    }
+    cli::cat_line()
+    cli::cat_line(cli::col_grey(
+      "# label these, then: session <- conflibert_active_next(session, labels)"
     ))
-    print(utils::head(x$query, n))
-    cat("\nLabel these, then call:  session <- conflibert_active_next(session, labels)\n")
+    cli::cat_line(cli::col_grey(
+      "# or point and click:  labels <- conflibert_active_label(session)"
+    ))
   } else if (isTRUE(x$done)) {
-    cat("\nPool exhausted. Save with:  conflibert_active_save(session, dir)\n")
+    cli::cat_line()
+    cli::cat_line(cli::col_grey(
+      "# pool exhausted; save with conflibert_active_save(session, dir)"
+    ))
   }
   invisible(x)
 }
@@ -514,7 +536,9 @@ plot.conflibert_al_session <- function(
   }
 
   base_cols <- c("round", "train_size", "uncertainty_mean", "uncertainty_max")
-  metric_cols <- setdiff(names(m), base_cols)
+  # `loss` lives on a different scale than the 0..1 score metrics; keep
+  # it in the metrics tibble but leave it out of the score panel.
+  metric_cols <- setdiff(names(m), c(base_cols, "loss"))
   has_metrics <- length(metric_cols) > 0L &&
     any(!is.na(unlist(m[metric_cols])))
   has_uncert <- any(!is.na(m$uncertainty_mean))
@@ -529,9 +553,6 @@ plot.conflibert_al_session <- function(
     return(invisible(x))
   }
 
-  oldpar <- graphics::par(no.readonly = TRUE)
-  on.exit(graphics::par(oldpar), add = TRUE)
-
   show_metrics <- which %in% c("all", "metrics") && has_metrics
   show_uncert  <- which %in% c("all", "uncertainty") && has_uncert
   n_panels <- show_metrics + show_uncert
@@ -539,25 +560,61 @@ plot.conflibert_al_session <- function(
     message("Nothing to plot.")
     return(invisible(x))
   }
-  if (n_panels == 2L) graphics::par(mfrow = c(2, 1), mar = c(4, 4, 3, 1))
 
-  cols <- c("#ff6b35", "#3b82f6", "#10b981", "#8b5cf6", "#ef4444", "#64748b")
+  oldpar <- graphics::par(no.readonly = TRUE)
+  on.exit(graphics::par(oldpar), add = TRUE)
+  graphics::par(
+    family   = "sans",
+    bg       = "white",
+    col.axis = "#475569",
+    col.lab  = "#1f2937",
+    col.main = "#0f172a",
+    cex.main = 1.15, font.main = 2,
+    cex.lab  = 0.95,
+    cex.axis = 0.85,
+    tcl = -0.25, mgp = c(2.5, 0.5, 0), las = 1
+  )
+  if (n_panels == 2L) {
+    graphics::par(mfrow = c(2, 1), mar = c(4.2, 4.4, 3.2, 1.5))
+  } else {
+    graphics::par(mar = c(4.2, 4.4, 3.2, 1.5))
+  }
+
+  pal <- c("#0ea5e9", "#f59e0b", "#10b981", "#8b5cf6",
+           "#ef4444", "#64748b")
+  grid_col <- "#eef1f6"
+
+  panel_frame <- function(xs, ylim, title, xlab, ylab) {
+    graphics::plot.new()
+    graphics::plot.window(xlim = range(xs), ylim = ylim)
+    yt <- pretty(ylim, n = 5)
+    graphics::abline(h = yt, col = grid_col, lwd = 1)
+    graphics::axis(1, col = NA, col.ticks = NA)
+    graphics::axis(2, at = yt, col = NA, col.ticks = NA)
+    graphics::title(main = title, adj = 0, line = 1.4)
+    graphics::title(xlab = xlab, line = 2.4)
+    graphics::title(ylab = ylab, line = 2.8)
+  }
+
   xs <- m$train_size
 
   if (show_metrics) {
-    plot(xs, m[[metric_cols[1]]], type = "n", ylim = c(0, 1),
-         xlab = "Labeled examples", ylab = "Score",
-         main = "Learning curve", ...)
-    graphics::grid(col = "grey85", lty = 3)
+    panel_frame(xs, ylim = c(0, 1),
+                title = "Learning curve",
+                xlab = "Labeled examples",
+                ylab = "Score")
     for (i in seq_along(metric_cols)) {
       vals <- m[[metric_cols[i]]]
-      col <- cols[((i - 1L) %% length(cols)) + 1L]
-      graphics::lines(xs, vals, col = col, lwd = 2)
-      graphics::points(xs, vals, col = col, pch = 19, cex = 1.1)
+      col <- pal[((i - 1L) %% length(pal)) + 1L]
+      graphics::lines(xs, vals, col = col, lwd = 2.4)
+      graphics::points(xs, vals, pch = 19, col = col, cex = 1.2)
     }
     graphics::legend(
       "bottomright", legend = metric_cols,
-      col = cols[seq_along(metric_cols)], lwd = 2, pch = 19, bty = "n"
+      col   = pal[seq_along(metric_cols)],
+      pch = 19, pt.cex = 1.1, lwd = 2,
+      bty = "n", text.col = "#334155",
+      cex = 0.85, inset = c(0.02, 0.02), seg.len = 1.6
     )
   }
 
@@ -565,23 +622,32 @@ plot.conflibert_al_session <- function(
     keep <- !is.na(m$uncertainty_mean)
     ux <- m$train_size[keep]
     umean <- m$uncertainty_mean[keep]
-    umax <- m$uncertainty_max[keep]
+    umax  <- m$uncertainty_max[keep]
     ylim <- range(c(umean, umax), na.rm = TRUE)
     if (diff(ylim) == 0) ylim <- ylim + c(-0.01, 0.01)
-    plot(ux, umean, type = "n", ylim = ylim,
-         xlab = "Labeled examples", ylab = "Query uncertainty",
-         main = "Uncertainty of queried samples")
-    graphics::grid(col = "grey85", lty = 3)
-    graphics::polygon(
-      c(ux, rev(ux)), c(umean, rev(umax)),
-      col = grDevices::adjustcolor("#3b82f6", alpha.f = 0.15), border = NA
-    )
-    graphics::lines(ux, umax, col = "#3b82f6", lwd = 1, lty = 2)
-    graphics::lines(ux, umean, col = "#3b82f6", lwd = 2)
-    graphics::points(ux, umean, col = "#3b82f6", pch = 19, cex = 1.1)
+    pad <- 0.08 * diff(ylim)
+    ylim <- c(max(0, ylim[1] - pad), ylim[2] + pad)
+
+    panel_frame(ux, ylim = ylim,
+                title = "Query uncertainty",
+                xlab = "Labeled examples",
+                ylab = "Uncertainty")
+
+    if (length(ux) >= 2L) {
+      graphics::polygon(
+        c(ux, rev(ux)), c(umean, rev(umax)),
+        col = grDevices::adjustcolor("#0ea5e9", alpha.f = 0.14),
+        border = NA
+      )
+    }
+    graphics::lines(ux, umax,  col = "#0ea5e9", lwd = 1,   lty = 3)
+    graphics::lines(ux, umean, col = "#0ea5e9", lwd = 2.4)
+    graphics::points(ux, umean, pch = 19, col = "#0ea5e9", cex = 1.2)
     graphics::legend(
       "topright", legend = c("mean", "max"),
-      col = "#3b82f6", lwd = c(2, 1), lty = c(1, 2), bty = "n"
+      col = "#0ea5e9", lwd = c(2.2, 1), lty = c(1, 3),
+      bty = "n", text.col = "#334155",
+      cex = 0.85, inset = c(0.02, 0.02), seg.len = 1.6
     )
   }
 
@@ -614,7 +680,12 @@ plot.conflibert_al_session <- function(
 .al_round_row <- function(round, train_size, metrics, uncertainty) {
   row <- tibble::tibble(round = as.integer(round),
                         train_size = as.integer(train_size))
-  for (k in names(metrics)) row[[k]] <- as.numeric(metrics[[k]])
+  # HF Trainer reports training throughput on every evaluate(); these
+  # aren't learning signals, so keep them out of the round-by-round table.
+  drop <- c("runtime", "samples_per_second", "steps_per_second")
+  for (k in setdiff(names(metrics), drop)) {
+    row[[k]] <- as.numeric(metrics[[k]])
+  }
   row$uncertainty_mean <- if (length(uncertainty)) {
     round(mean(uncertainty), 4)
   } else NA_real_

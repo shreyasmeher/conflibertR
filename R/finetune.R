@@ -20,12 +20,13 @@
 #'   the model and tokenizer are saved there and can be loaded later with
 #'   \code{\link{conflibert_load}}.
 #' @param use_lora If \code{TRUE}, fine-tune with a LoRA adapter
-#'   (parameter-efficient; cuts GPU memory \~5x). The adapter is merged
+#'   (parameter-efficient; cuts GPU memory roughly 5x). The adapter is merged
 #'   into the base model before saving, so loading is the same as for
 #'   full fine-tuning. Default: \code{FALSE}.
 #' @param lora_rank LoRA rank. Default: 8.
 #' @param lora_alpha LoRA alpha. Default: 16.
-#' @return A list with:
+#' @return An object of class \code{"conflibert_finetune"} (a list, so all
+#'   existing \code{$} access keeps working) with:
 #'   \describe{
 #'     \item{metrics}{Tibble of test-set metrics.}
 #'     \item{runtime}{Training time in seconds.}
@@ -34,7 +35,10 @@
 #'       columns = classes).}
 #'     \item{true_labels}{Integer vector of true labels.}
 #'     \item{model_dir}{Path where the model checkpoint was saved.}
+#'     \item{model, task}{The base model name and task type.}
 #'   }
+#'   It has a themed \code{print()} method and a \code{plot()} method
+#'   showing the test-set confusion matrix.
 #' @export
 #' @examples
 #' \dontrun{
@@ -78,16 +82,21 @@ conflibert_finetune <- function(
   )
 
   metrics_df <- tibble::as_tibble(as.data.frame(r$metrics))
-  probs_mat <- do.call(rbind, r$probabilities)
+  probs <- r$probabilities
+  probs_mat <- if (is.matrix(probs)) probs else do.call(rbind, probs)
 
-  list(
+  out <- list(
     metrics      = metrics_df,
     runtime      = r$runtime,
     predictions  = unlist(r$predictions),
     probabilities = probs_mat,
     true_labels  = unlist(r$true_labels),
-    model_dir    = r$model_dir
+    model_dir    = r$model_dir,
+    model        = model,
+    task         = task
   )
+  class(out) <- "conflibert_finetune"
+  out
 }
 
 
@@ -101,7 +110,8 @@ conflibert_finetune <- function(
 #' @param models Character vector of model names to compare.
 #'   See \code{\link{conflibert_models}} for available names.
 #' @return A tibble with one row per model and columns for each metric
-#'   plus \code{runtime}.
+#'   plus \code{runtime}. It has a themed \code{print()} method that
+#'   ranks models, and a \code{plot()} method comparing metrics.
 #' @export
 #' @examples
 #' \dontrun{
@@ -146,7 +156,14 @@ conflibert_compare <- function(
   )
 
   rows <- lapply(results, function(r) tibble::as_tibble(as.data.frame(r)))
-  do.call(rbind, rows)
+  # a failed model returns only (model, error); align columns before binding
+  all_cols <- unique(unlist(lapply(rows, names)))
+  rows <- lapply(rows, function(df) {
+    for (mc in setdiff(all_cols, names(df))) df[[mc]] <- NA
+    df[all_cols]
+  })
+  out <- do.call(rbind, rows)
+  .cb_result(out, "conflibert_comparison")
 }
 
 

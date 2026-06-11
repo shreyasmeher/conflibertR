@@ -4,7 +4,7 @@
 #   Rscript tools/make_screenshots.R
 #
 # Produces:
-#   man/figures/active-learning-plot.png    # plot(session) — two panels
+#   man/figures/active-learning-plot.png    # plot(session), two panels
 #   man/figures/active-learning-gadget.png  # conflibert_active_label() UI
 #
 # The plot is built from synthetic metrics so this script runs in
@@ -111,7 +111,7 @@ writeLines(c(
   '      span("Label 10 samples (round 2)"),',
   '      tags$button(class = "al-submit", "Submit")),',
   '  div(class = "al-progress",',
-  '      "Labeled 3 of 10 — Click Submit when every row has a choice."),',
+  '      "Labeled 3 of 10. Click Submit when every row has a choice."),',
   '  uiOutput("rows")',
   ')',
   'server <- function(input, output, session) {',
