@@ -1,27 +1,43 @@
 #' Install Python dependencies for ConfliBERT
 #'
 #' Creates a Python environment and installs the packages needed
-#' to run ConfliBERT models (torch, transformers, tensorflow, tf-keras).
+#' to run ConfliBERT models (torch, transformers, and friends).
 #' Only needs to be run once.
 #'
-#' If you have issues with the default virtualenv method (especially
-#' torch compatibility), try \code{method = "conda"} instead.
+#' As of conflibertR 0.5.0 the backend is PyTorch-only: TensorFlow is no
+#' longer required, which makes installation considerably smaller and
+#' more reliable. If you have issues with the default virtualenv method,
+#' try \code{method = "conda"} instead.
 #'
 #' @param envname Name of the environment. Default: \code{"conflibert"}.
-#' @param method \code{"conda"} (recommended) or \code{"virtualenv"}.
+#' @param method \code{"auto"} (default; uses conda when available),
+#'   \code{"conda"}, or \code{"virtualenv"}.
+#' @param qa If \code{TRUE}, also install TensorFlow. The published
+#'   ConfliBERT QA checkpoint only ships TensorFlow weights;
+#'   \code{\link{conflibert_qa}} converts them to PyTorch on first use
+#'   (a one-time step that needs TensorFlow) and caches the result, after
+#'   which TensorFlow is never used again. All other functions are pure
+#'   PyTorch. Default: \code{FALSE}.
 #' @return Invisible \code{NULL}. Called for its side effect.
 #' @export
 #' @examples
 #' \dontrun{
-#' # Recommended:
-#' conflibert_install(method = "conda")
+#' conflibert_install()
 #'
-#' # Alternative:
-#' conflibert_install(method = "virtualenv")
+#' # Include TensorFlow for the one-time QA weight conversion:
+#' conflibert_install(qa = TRUE)
 #' }
-conflibert_install <- function(envname = "conflibert", method = "auto") {
-  packages <- c("torch", "transformers>=4.40,<4.50", "accelerate", "peft",
-                 "scikit-learn", "tensorflow", "tf-keras")
+conflibert_install <- function(envname = "conflibert", method = "auto",
+                               qa = FALSE) {
+  packages <- if (isTRUE(qa)) {
+    # the one-time TF -> PyTorch QA conversion needs tensorflow and a
+    # transformers version that still bundles TF support
+    c("torch", "transformers>=4.40,<4.50", "accelerate", "peft",
+      "scikit-learn", "tensorflow", "tf-keras")
+  } else {
+    c("torch", "transformers>=4.40", "accelerate", "peft",
+      "scikit-learn")
+  }
 
   # Auto-detect: use conda if available, otherwise virtualenv
   if (method == "auto") {
@@ -33,20 +49,22 @@ conflibert_install <- function(envname = "conflibert", method = "auto") {
       }, error = function(e) FALSE, warning = function(w) FALSE)
     }
     method <- if (has_conda) "conda" else "virtualenv"
-    message("Detected method: ", method)
+    cli::cli_alert_info("Detected method: {method}")
   }
 
   if (method == "conda") {
-    message("Installing with conda...")
+    cli::cli_progress_step("Installing Python dependencies with conda")
     reticulate::conda_create(envname)
     reticulate::conda_install(envname, packages = packages, pip = TRUE)
   } else {
-    message("Installing with virtualenv...")
+    cli::cli_progress_step("Installing Python dependencies with virtualenv")
     reticulate::virtualenv_create(envname)
     reticulate::virtualenv_install(envname, packages = packages)
   }
 
-  message("Python dependencies installed in '", envname, "' environment.")
-  message("Restart R, then: library(conflibertR)")
+  cli::cli_alert_success(
+    "Python dependencies installed in the {.val {envname}} environment."
+  )
+  cli::cli_alert_info("Restart R, then run {.code library(conflibertR)}.")
   invisible(NULL)
 }

@@ -1,2 +1,8 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^\.claude$
+^\.gitignore$
+^notebooks$
+^tools$
+^\.DS_Store$
+^README\.html$

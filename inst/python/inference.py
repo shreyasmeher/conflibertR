@@ -5,7 +5,6 @@ downloads and loads the model, and subsequent calls reuse it.
 """
 
 import os
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 import torch
 import numpy as np
@@ -13,6 +12,8 @@ import gc
 import tempfile
 
 _models = {}
+
+_BATCH_SIZE = 32
 
 MODEL_MAP = {
     "ConfliBERT": "snowood1/ConfliBERT-scr-uncased",
@@ -60,10 +61,7 @@ def _load(task):
         model = AutoModelForSequenceClassification.from_pretrained(name).to(device)
         tokenizer = AutoTokenizer.from_pretrained(name)
     elif task == "qa":
-        from transformers import TFAutoModelForQuestionAnswering
-        name = "salsarra/ConfliBERT-QA"
-        model = TFAutoModelForQuestionAnswering.from_pretrained(name)
-        tokenizer = AutoTokenizer.from_pretrained(name)
+        model, tokenizer = _load_qa(device)
     else:
         raise ValueError(f"Unknown task: {task}")
 
@@ -71,134 +69,289 @@ def _load(task):
     return model, tokenizer
 
 
-def ner(text):
-    """Run NER on a single text string.
+def is_loaded(task):
+    """True if the model for `task` is already loaded in this session."""
+    return task in _models
 
-    Returns a list of dicts with 'entity' and 'label' keys.
+
+def _qa_cache_dir():
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(
+        os.path.expanduser("~"), ".cache"
+    )
+    return os.path.join(base, "conflibertR", "ConfliBERT-QA-pt")
+
+
+def _load_qa(device):
+    """Load the QA model in PyTorch.
+
+    The published checkpoint only ships TensorFlow weights, so the first
+    load converts them to PyTorch (requires TensorFlow once) and caches
+    the converted copy; every later load is pure PyTorch.
+    """
+    from transformers import AutoTokenizer, AutoModelForQuestionAnswering
+
+    name = "salsarra/ConfliBERT-QA"
+    cache = _qa_cache_dir()
+
+    has_cached_weights = any(
+        os.path.exists(os.path.join(cache, f))
+        for f in ("model.safetensors", "pytorch_model.bin")
+    )
+    if has_cached_weights:
+        model = AutoModelForQuestionAnswering.from_pretrained(cache).to(device)
+        tokenizer = AutoTokenizer.from_pretrained(cache)
+        return model, tokenizer
+
+    try:
+        model = AutoModelForQuestionAnswering.from_pretrained(name).to(device)
+        tokenizer = AutoTokenizer.from_pretrained(name)
+        return model, tokenizer
+    except (OSError, EnvironmentError):
+        pass
+
+    try:
+        import tensorflow  # noqa: F401
+    except ImportError as e:
+        raise RuntimeError(
+            "The ConfliBERT QA checkpoint only publishes TensorFlow "
+            "weights, and no converted copy was found locally. Install "
+            "TensorFlow once to convert it:\n"
+            "  conflibert_install(qa = TRUE)\n"
+            "After the first successful QA call the converted PyTorch "
+            "weights are cached and TensorFlow is never needed again."
+        ) from e
+
+    # convert the TF checkpoint manually: from_pretrained(from_tf=True)
+    # initializes on the meta device in recent transformers and yields a
+    # weightless model
+    from transformers import AutoConfig
+    from transformers.modeling_tf_pytorch_utils import (
+        load_tf2_checkpoint_in_pytorch_model,
+    )
+    from huggingface_hub import hf_hub_download
+
+    config = AutoConfig.from_pretrained(name)
+    model = AutoModelForQuestionAnswering.from_config(config)
+    h5 = hf_hub_download(name, "tf_model.h5")
+    model = load_tf2_checkpoint_in_pytorch_model(
+        model, h5, allow_missing_keys=True
+    )
+    tokenizer = AutoTokenizer.from_pretrained(name)
+    os.makedirs(cache, exist_ok=True)
+    model.save_pretrained(cache)
+    tokenizer.save_pretrained(cache)
+    return model.to(device), tokenizer
+
+
+def ner_batch(texts):
+    """Run NER over a list of texts.
+
+    Returns a columnar dict with doc_id (1-based), entity, label, score,
+    start, end. Offsets are 1-based inclusive character positions into the
+    original text (ready for R's substr()).
     """
     model, tokenizer = _load("ner")
     device = _get_device()
-    inputs = tokenizer(text, return_tensors="pt", truncation=True)
-    inputs = {k: v.to(device) for k, v in inputs.items()}
-    with torch.no_grad():
-        outputs = model(**inputs)
+    texts = list(texts)
 
-    tag_ids = outputs.logits.argmax(dim=2).squeeze().cpu().tolist()
-    tokens = tokenizer.convert_ids_to_tokens(
-        inputs["input_ids"].squeeze().cpu().tolist()
-    )
+    out = {"doc_id": [], "entity": [], "label": [],
+           "score": [], "start": [], "end": []}
 
-    entities = []
-    current_words = []
-    current_label = None
+    for lo in range(0, len(texts), _BATCH_SIZE):
+        batch = texts[lo:lo + _BATCH_SIZE]
+        enc = tokenizer(
+            batch, return_tensors="pt", truncation=True, padding=True, max_length=512,
+            return_offsets_mapping=True, return_special_tokens_mask=True,
+        )
+        offsets = enc.pop("offset_mapping").tolist()
+        special = enc.pop("special_tokens_mask").tolist()
+        inputs = {k: v.to(device) for k, v in enc.items()}
+        with torch.no_grad():
+            logits = model(**inputs).logits
+        probs = torch.softmax(logits, dim=2).cpu().numpy()
+        tag_ids = probs.argmax(axis=2)
+        attn = enc["attention_mask"].tolist()
 
-    for i in range(len(tokens)):
-        token = tokens[i]
-        label = model.config.id2label[tag_ids[i]].split("-")[-1]
+        for b, text in enumerate(batch):
+            tokens = tokenizer.convert_ids_to_tokens(enc["input_ids"][b].tolist())
+            ent = None  # [label, start, end, [probs]]
 
-        if token.startswith("##"):
-            if current_words:
-                current_words[-1] += token[2:]
-        elif label != "O":
-            if label == current_label:
-                current_words.append(token)
-            else:
-                if current_words:
-                    entities.append({
-                        "entity": " ".join(current_words),
-                        "label": current_label,
-                    })
-                current_words = [token]
-                current_label = label
-        else:
-            if current_words:
-                entities.append({
-                    "entity": " ".join(current_words),
-                    "label": current_label,
-                })
-                current_words = []
-                current_label = None
+            def close(e):
+                if e is None:
+                    return
+                out["doc_id"].append(lo + b + 1)
+                out["entity"].append(text[e[1]:e[2]])
+                out["label"].append(e[0])
+                out["score"].append(round(float(np.mean(e[3])), 4))
+                out["start"].append(e[1] + 1)
+                out["end"].append(e[2])
 
-    if current_words:
-        entities.append({
-            "entity": " ".join(current_words),
-            "label": current_label,
-        })
+            for i, token in enumerate(tokens):
+                if not attn[b][i] or special[b][i]:
+                    continue
+                label = model.config.id2label[int(tag_ids[b][i])].split("-")[-1]
+                p = float(probs[b][i][tag_ids[b][i]])
+                o_start, o_end = offsets[b][i]
 
-    return entities
+                if token.startswith("##"):
+                    # continuation word-piece: stays with the open entity
+                    if ent is not None:
+                        ent[2] = o_end
+                        ent[3].append(p)
+                elif label != "O":
+                    if ent is not None and label == ent[0]:
+                        ent[2] = o_end
+                        ent[3].append(p)
+                    else:
+                        close(ent)
+                        ent = [label, o_start, o_end, [p]]
+                else:
+                    close(ent)
+                    ent = None
+            close(ent)
+
+    return out
 
 
-def classify(text):
-    """Binary classification: conflict-related or not.
+def classify_batch(texts, batch_size=_BATCH_SIZE):
+    """Binary classification over a list of texts.
 
-    Returns a dict with label, class, confidence, prob_negative, prob_positive.
+    Returns a columnar dict with label, class, confidence, prob_negative,
+    prob_positive (one element per input text).
     """
     model, tokenizer = _load("classify")
     device = _get_device()
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
-    inputs = {k: v.to(device) for k, v in inputs.items()}
+    texts = list(texts)
 
-    with torch.no_grad():
-        outputs = model(**inputs)
+    out = {"label": [], "class": [], "confidence": [],
+           "prob_negative": [], "prob_positive": []}
 
-    probs = torch.softmax(outputs.logits, dim=1).squeeze()
-    predicted = torch.argmax(probs).item()
+    for lo in range(0, len(texts), int(batch_size)):
+        batch = texts[lo:lo + int(batch_size)]
+        inputs = tokenizer(
+            batch, return_tensors="pt", truncation=True, padding=True, max_length=512,
+        )
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+        with torch.no_grad():
+            logits = model(**inputs).logits
+        probs = torch.softmax(logits, dim=1).cpu().numpy()
+        preds = probs.argmax(axis=1)
 
-    return {
-        "label": "Positive" if predicted == 1 else "Negative",
-        "class": int(predicted),
-        "confidence": round(float(probs[predicted].item()), 4),
-        "prob_negative": round(float(probs[0].item()), 4),
-        "prob_positive": round(float(probs[1].item()), 4),
-    }
+        for i in range(len(batch)):
+            p = int(preds[i])
+            out["label"].append("Positive" if p == 1 else "Negative")
+            out["class"].append(p)
+            out["confidence"].append(round(float(probs[i][p]), 4))
+            out["prob_negative"].append(round(float(probs[i][0]), 4))
+            out["prob_positive"].append(round(float(probs[i][1]), 4))
+
+    return out
 
 
-def multilabel(text):
-    """Multilabel classification across four event types.
+MULTILABEL_CATEGORIES = [
+    "Armed Assault", "Bombing or Explosion", "Kidnapping", "Other",
+]
 
-    Returns a list of dicts with label, probability, predicted.
+
+def multilabel_batch(texts, batch_size=_BATCH_SIZE):
+    """Multilabel classification over a list of texts.
+
+    Returns a dict with 'categories' and 'probabilities' (one row of
+    category probabilities per input text).
     """
     model, tokenizer = _load("multilabel")
     device = _get_device()
-    categories = ["Armed Assault", "Bombing or Explosion", "Kidnapping", "Other"]
+    texts = list(texts)
 
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
-    inputs = {k: v.to(device) for k, v in inputs.items()}
+    rows = []
+    for lo in range(0, len(texts), int(batch_size)):
+        batch = texts[lo:lo + int(batch_size)]
+        inputs = tokenizer(
+            batch, return_tensors="pt", truncation=True, padding=True, max_length=512,
+        )
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+        with torch.no_grad():
+            logits = model(**inputs).logits
+        probs = torch.sigmoid(logits).cpu().numpy()
+        rows.extend([[round(float(x), 4) for x in row] for row in probs])
 
-    with torch.no_grad():
-        outputs = model(**inputs)
-
-    probs = torch.sigmoid(outputs.logits).squeeze().tolist()
-
-    return [
-        {
-            "label": categories[i],
-            "probability": round(probs[i], 4),
-            "predicted": bool(probs[i] >= 0.5),
-        }
-        for i in range(len(categories))
-    ]
+    return {"categories": MULTILABEL_CATEGORIES, "probabilities": rows}
 
 
 def qa(context, question):
-    """Extractive question answering.
+    """Extractive question answering (PyTorch).
 
-    Returns a dict with 'answer'.
+    Returns a dict with answer, score, start, end. Offsets are 1-based
+    inclusive character positions into the context.
     """
-    import tensorflow as tf
-
     model, tokenizer = _load("qa")
-    inputs = tokenizer(question, context, return_tensors="tf", truncation=True)
-    outputs = model(inputs)
+    device = _get_device()
 
-    start = tf.argmax(outputs.start_logits, axis=1).numpy()[0]
-    end = tf.argmax(outputs.end_logits, axis=1).numpy()[0] + 1
-    answer_tokens = tokenizer.convert_ids_to_tokens(
-        inputs["input_ids"].numpy()[0][start:end]
+    enc = tokenizer(
+        question, context, return_tensors="pt", truncation=True,
+        max_length=512, return_offsets_mapping=True,
     )
-    answer = tokenizer.convert_tokens_to_string(answer_tokens)
+    offsets = enc.pop("offset_mapping")[0].tolist()
+    seq_ids = enc.sequence_ids(0)
+    inputs = {k: v.to(device) for k, v in enc.items()}
+    with torch.no_grad():
+        out = model(**inputs)
 
-    return {"answer": answer}
+    start_logits = out.start_logits[0].cpu()
+    end_logits = out.end_logits[0].cpu()
+
+    # only consider positions inside the context passage
+    mask = torch.tensor(
+        [0.0 if s == 1 else float("-inf") for s in seq_ids]
+    )
+    start_logits = start_logits + mask
+    end_logits = end_logits + mask
+
+    start = int(torch.argmax(start_logits))
+    end_tail = end_logits.clone()
+    end_tail[:start] = float("-inf")
+    end = int(torch.argmax(end_tail))
+
+    p_start = torch.softmax(start_logits, dim=0)[start]
+    p_end = torch.softmax(end_logits, dim=0)[end]
+    score = float(p_start * p_end)
+
+    char_start, char_end = offsets[start][0], offsets[end][1]
+    return {
+        "answer": context[char_start:char_end],
+        "score": round(score, 4),
+        "start": int(char_start) + 1,
+        "end": int(char_end),
+    }
+
+
+# --- single-text wrappers kept for backward compatibility ---------------
+
+def ner(text):
+    """Run NER on a single text. Returns a list of dicts."""
+    r = ner_batch([text])
+    return [
+        {"entity": r["entity"][i], "label": r["label"][i],
+         "score": r["score"][i], "start": r["start"][i], "end": r["end"][i]}
+        for i in range(len(r["entity"]))
+    ]
+
+
+def classify(text):
+    """Binary classification of a single text. Returns a dict."""
+    r = classify_batch([text])
+    return {k: v[0] for k, v in r.items()}
+
+
+def multilabel(text):
+    """Multilabel classification of a single text. Returns a list of dicts."""
+    r = multilabel_batch([text])
+    probs = r["probabilities"][0]
+    return [
+        {"label": r["categories"][i], "probability": probs[i],
+         "predicted": bool(probs[i] >= 0.5)}
+        for i in range(len(probs))
+    ]
 
 
 # =========================================================================
@@ -216,7 +369,7 @@ def benchmark(texts, labels):
 
     texts = list(texts)
     labels = [int(l) for l in labels]
-    predictions = [classify(t)["class"] for t in texts]
+    predictions = classify_batch(texts)["class"]
 
     return {
         "accuracy": round(accuracy_score(labels, predictions), 4),
