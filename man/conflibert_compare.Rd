@@ -15,7 +15,8 @@ conflibert_compare(
   lr = 2e-05,
   use_lora = FALSE,
   lora_rank = 8,
-  lora_alpha = 16
+  lora_alpha = 16,
+  seed = 42
 )
 }
 \arguments{
@@ -44,6 +45,11 @@ full fine-tuning. Default: \code{FALSE}.}
 \item{lora_rank}{LoRA rank. Default: 8.}
 
 \item{lora_alpha}{LoRA alpha. Default: 16.}
+
+\item{seed}{Random seed for reproducibility. Seeds the classifier-head
+initialization, data shuffling, and dropout so that two runs with the
+same seed on the same hardware and package versions give identical
+results. Change it to study run-to-run variability. Default: 42.}
 }
 \value{
 A tibble with one row per model and columns for each metric

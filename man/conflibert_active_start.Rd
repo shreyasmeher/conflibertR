@@ -20,7 +20,8 @@ conflibert_active_start(
   max_seq_len = 512,
   use_lora = FALSE,
   lora_rank = 8,
-  lora_alpha = 16
+  lora_alpha = 16,
+  random_seed = 42
 )
 }
 \arguments{
@@ -66,6 +67,14 @@ cluster when \code{diverse = TRUE}. Default: \code{3 * query_size}.}
 \item{lora_rank}{LoRA rank. Default: 8.}
 
 \item{lora_alpha}{LoRA alpha. Default: 16.}
+
+\item{random_seed}{Random seed for reproducibility (named to avoid a
+clash with the labeled \code{seed} set above). Seeds each round's
+model training and, when \code{diverse = TRUE}, the k-means
+clustering used to pick a diverse query, so re-running the whole
+session on the same hardware and package versions reproduces the
+same queries and metrics. It is stored in the session and reused by
+\code{\link{conflibert_active_next}}. Default: 42.}
 }
 \value{
 An object of class \code{"conflibert_al_session"}: a list
