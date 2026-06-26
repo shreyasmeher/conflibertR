@@ -18,6 +18,11 @@
 #'   (a one-time step that needs TensorFlow) and caches the result, after
 #'   which TensorFlow is never used again. All other functions are pure
 #'   PyTorch. Default: \code{FALSE}.
+#'
+#' @details Models downloaded from 'Hugging Face' are cached under
+#'   \code{$HF_HOME} (default \code{~/.cache/huggingface}) and the converted
+#'   QA weights under \code{~/.cache/conflibertR} (or \code{$XDG_CACHE_HOME}).
+#'   Set those environment variables to relocate the caches.
 #' @return Invisible \code{NULL}. Called for its side effect.
 #' @export
 #' @examples

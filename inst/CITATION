@@ -1,0 +1,37 @@
+citHeader("To cite conflibertR in publications, please cite the ConfliBERT model paper (Hu et al. 2022). If you use the question-answering or generative-comparison features, please also cite Brandt et al. (2025).")
+
+bibentry(
+  bibtype  = "InProceedings",
+  title    = "{ConfliBERT}: A Pre-trained Language Model for Political Conflict and Violence",
+  author   = c(
+    person("Yibo", "Hu"),
+    person("MohammadSaleh", "Hosseini"),
+    person(c("Erick", "Skorupa"), "Parolin"),
+    person("Javier", "Osorio"),
+    person("Latifur", "Khan"),
+    person("Patrick", "Brandt"),
+    person("Vito", "D'Orazio")
+  ),
+  booktitle = "Proceedings of the 2022 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies",
+  year      = "2022",
+  pages     = "5469--5482",
+  doi       = "10.18653/v1/2022.naacl-main.400"
+)
+
+bibentry(
+  bibtype  = "Article",
+  title    = "Extractive versus Generative Language Models for Political Conflict Text Classification",
+  author   = c(
+    person(c("Patrick", "T."), "Brandt"),
+    person("Sultan", "Alsarra"),
+    person("Vito", "D'Orazio"),
+    person("Dagmar", "Heintze"),
+    person("Latifur", "Khan"),
+    person("Shreyas", "Meher"),
+    person("Javier", "Osorio"),
+    person("Marcus", "Sianan")
+  ),
+  journal  = "Political Analysis",
+  year     = "2025",
+  pages    = "1--29"
+)

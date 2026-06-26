@@ -312,6 +312,10 @@ conflibert_active_next <- function(session, labels) {
 #' }
 conflibert_active_label <- function(session, classes = NULL) {
   stopifnot(inherits(session, "conflibert_al_session"))
+  if (!interactive()) {
+    stop("conflibert_active_label() is only available in interactive sessions.",
+         call. = FALSE)
+  }
   if (isTRUE(session$done) || nrow(session$query) == 0L) {
     stop("No samples to label in this session.", call. = FALSE)
   }
@@ -450,7 +454,8 @@ conflibert_active_label <- function(session, classes = NULL) {
 #' @export
 #' @examples
 #' \dontrun{
-#' conflibert_active_save(session, "my_al_model")
+#' dir <- file.path(tempdir(), "my_al_model")
+#' conflibert_active_save(session, dir)
 #' }
 conflibert_active_save <- function(session, dir) {
   stopifnot(inherits(session, "conflibert_al_session"))

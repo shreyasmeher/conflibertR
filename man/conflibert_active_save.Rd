@@ -22,6 +22,7 @@ is a standard HuggingFace checkpoint that can be reloaded with any
 }
 \examples{
 \dontrun{
-conflibert_active_save(session, "my_al_model")
+dir <- file.path(tempdir(), "my_al_model")
+conflibert_active_save(session, dir)
 }
 }
