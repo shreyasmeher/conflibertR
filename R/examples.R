@@ -23,11 +23,12 @@
 #'   active-learning pool). See \code{name} for the shape per dataset.
 #' @export
 #' @examples
-#' \dontrun{
+#' # Loading the bundled data is pure R and needs no Python backend:
 #' data <- conflibert_example("binary")
 #' data$train
 #'
-#' # Fine-tune with example data
+#' \dontrun{
+#' # Fine-tune with example data (needs the Python backend)
 #' result <- conflibert_finetune(
 #'   train = data$train, dev = data$dev, test = data$test,
 #'   model = "ConfliBERT", task = "binary", epochs = 1

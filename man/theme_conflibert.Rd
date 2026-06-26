@@ -29,9 +29,11 @@ grid lines only along the data axis, bold left-aligned titles, and
 generous whitespace. Use it on your own plots to match.
 }
 \examples{
-\dontrun{
-ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) +
-  ggplot2::geom_point(colour = "#0ea5e9", size = 3) +
-  theme_conflibert(grid = "y")
+\donttest{
+if (requireNamespace("ggplot2", quietly = TRUE)) {
+  ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) +
+    ggplot2::geom_point(colour = "#0ea5e9", size = 3) +
+    theme_conflibert(grid = "y")
+}
 }
 }

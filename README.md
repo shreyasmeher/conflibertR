@@ -1,5 +1,9 @@
 # conflibertR
 
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/shreyasmeher/conflibertR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/shreyasmeher/conflibertR/actions/workflows/R-CMD-check.yaml)
+<!-- badges: end -->
+
 R interface to [ConfliBERT](https://github.com/eventdata/ConfliBERT), a pretrained language model for conflict and political violence text analysis.
 
 **Inference:** Named Entity Recognition, Binary Classification, Multilabel Classification, Question Answering.
