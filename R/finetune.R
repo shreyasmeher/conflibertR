@@ -25,6 +25,10 @@
 #'   full fine-tuning. Default: \code{FALSE}.
 #' @param lora_rank LoRA rank. Default: 8.
 #' @param lora_alpha LoRA alpha. Default: 16.
+#' @param seed Random seed for reproducibility. Seeds the classifier-head
+#'   initialization, data shuffling, and dropout so that two runs with the
+#'   same seed on the same hardware and package versions give identical
+#'   results. Change it to study run-to-run variability. Default: 42.
 #' @return An object of class \code{"conflibert_finetune"} (a list, so all
 #'   existing \code{$} access keeps working) with:
 #'   \describe{
@@ -54,7 +58,8 @@ conflibert_finetune <- function(
     model = "ConfliBERT", task = "binary",
     epochs = 3, batch_size = 8, lr = 2e-5,
     save_dir = NULL,
-    use_lora = FALSE, lora_rank = 8, lora_alpha = 16
+    use_lora = FALSE, lora_rank = 8, lora_alpha = 16,
+    seed = 42
 ) {
   stopifnot(
     is.data.frame(train), "text" %in% names(train), "label" %in% names(train),
@@ -78,7 +83,8 @@ conflibert_finetune <- function(
     save_dir     = save_dir,
     use_lora     = isTRUE(use_lora),
     lora_rank    = as.integer(lora_rank),
-    lora_alpha   = as.integer(lora_alpha)
+    lora_alpha   = as.integer(lora_alpha),
+    seed         = as.integer(seed)
   )
 
   metrics_df <- tibble::as_tibble(as.data.frame(r$metrics))
@@ -130,7 +136,8 @@ conflibert_compare <- function(
     models = c("ConfliBERT", "BERT Base Uncased"),
     task = "binary",
     epochs = 3, batch_size = 8, lr = 2e-5,
-    use_lora = FALSE, lora_rank = 8, lora_alpha = 16
+    use_lora = FALSE, lora_rank = 8, lora_alpha = 16,
+    seed = 42
 ) {
   stopifnot(
     is.data.frame(train), is.data.frame(dev), is.data.frame(test),
@@ -152,7 +159,8 @@ conflibert_compare <- function(
     lr           = as.numeric(lr),
     use_lora     = isTRUE(use_lora),
     lora_rank    = as.integer(lora_rank),
-    lora_alpha   = as.integer(lora_alpha)
+    lora_alpha   = as.integer(lora_alpha),
+    seed         = as.integer(seed)
   )
 
   rows <- lapply(results, function(r) tibble::as_tibble(as.data.frame(r)))

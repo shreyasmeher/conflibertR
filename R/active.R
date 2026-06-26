@@ -42,6 +42,13 @@
 #'   (parameter-efficient). Default: \code{FALSE}.
 #' @param lora_rank LoRA rank. Default: 8.
 #' @param lora_alpha LoRA alpha. Default: 16.
+#' @param random_seed Random seed for reproducibility (named to avoid a
+#'   clash with the labeled \code{seed} set above). Seeds each round's
+#'   model training and, when \code{diverse = TRUE}, the k-means
+#'   clustering used to pick a diverse query, so re-running the whole
+#'   session on the same hardware and package versions reproduces the
+#'   same queries and metrics. It is stored in the session and reused by
+#'   \code{\link{conflibert_active_next}}. Default: 42.
 #' @return An object of class \code{"conflibert_al_session"}: a list
 #'   with \code{query} (tibble of texts to label), \code{metrics}
 #'   (tibble of metrics across rounds), \code{round}, \code{labeled_n},
@@ -68,10 +75,12 @@ conflibert_active_start <- function(
     diverse = FALSE, diversity_candidates = NULL,
     query_size = 10,
     epochs = 3, batch_size = 8, lr = 2e-5, max_seq_len = 512,
-    use_lora = FALSE, lora_rank = 8, lora_alpha = 16
+    use_lora = FALSE, lora_rank = 8, lora_alpha = 16,
+    random_seed = 42
 ) {
   task <- match.arg(task)
   strategy <- match.arg(strategy)
+  random_seed <- as.integer(random_seed)
 
   seed_texts <- .al_check_labeled(seed, "seed")
   seed_labels <- as.integer(seed$label)
@@ -104,7 +113,8 @@ conflibert_active_start <- function(
     task        = task,
     use_lora    = isTRUE(use_lora),
     lora_rank   = as.integer(lora_rank),
-    lora_alpha  = as.integer(lora_alpha)
+    lora_alpha  = as.integer(lora_alpha),
+    seed        = random_seed
   )
 
   dc <- if (is.null(diversity_candidates)) {
@@ -116,7 +126,8 @@ conflibert_active_start <- function(
     available_idx = seq_along(pool_texts),
     strategy = strategy, query_size = query_size,
     max_seq_len = max_seq_len,
-    diverse = isTRUE(diverse), diversity_candidates = dc
+    diverse = isTRUE(diverse), diversity_candidates = dc,
+    seed = random_seed
   )
   round_metrics <- .al_round_row(
     0L, length(seed_texts), trained$metrics, query$tibble$uncertainty
@@ -148,7 +159,8 @@ conflibert_active_start <- function(
         max_seq_len = as.integer(max_seq_len),
         use_lora = isTRUE(use_lora),
         lora_rank = as.integer(lora_rank),
-        lora_alpha = as.integer(lora_alpha)
+        lora_alpha = as.integer(lora_alpha),
+        seed = random_seed
       )
     )
   )
@@ -223,7 +235,8 @@ conflibert_active_next <- function(session, labels) {
     task        = p$task,
     use_lora    = isTRUE(p$use_lora),
     lora_rank   = as.integer(p$lora_rank),
-    lora_alpha  = as.integer(p$lora_alpha)
+    lora_alpha  = as.integer(p$lora_alpha),
+    seed        = as.integer(p$seed)
   )
 
   if (length(st$pool_available) == 0L) {
@@ -249,7 +262,8 @@ conflibert_active_next <- function(session, labels) {
     strategy = p$strategy, query_size = p$query_size,
     max_seq_len = p$max_seq_len,
     diverse = isTRUE(p$diverse),
-    diversity_candidates = as.integer(p$diversity_candidates)
+    diversity_candidates = as.integer(p$diversity_candidates),
+    seed = as.integer(p$seed)
   )
   round_row <- .al_round_row(
     session$round, length(st$labeled_texts), trained$metrics,
@@ -657,6 +671,27 @@ plot.conflibert_al_session <- function(
 
 # ---- internal helpers -------------------------------------------------
 
+# Evaluate `expr` with the RNG seeded to `seed`, then restore whatever
+# RNG state the caller had (or remove .Random.seed if there was none).
+# When `seed` is NULL, `expr` runs untouched. Used to make seeded steps
+# (e.g. k-means) reproducible without clobbering the user's random stream.
+.al_with_seed <- function(seed, expr) {
+  if (is.null(seed)) {
+    return(expr)
+  }
+  if (exists(".Random.seed", envir = .GlobalEnv)) {
+    old_seed <- get(".Random.seed", envir = .GlobalEnv)
+    on.exit(assign(".Random.seed", old_seed, envir = .GlobalEnv), add = TRUE)
+  } else {
+    on.exit(
+      suppressWarnings(rm(".Random.seed", envir = .GlobalEnv)),
+      add = TRUE
+    )
+  }
+  set.seed(as.integer(seed))
+  expr
+}
+
 .al_check_labeled <- function(df, name) {
   if (!is.data.frame(df) || !all(c("text", "label") %in% names(df))) {
     stop(sprintf("`%s` must be a data.frame with `text` and `label` columns.",
@@ -697,7 +732,8 @@ plot.conflibert_al_session <- function(
 
 .al_pick_query <- function(py, trained, pool_texts, available_idx,
                             strategy, query_size, max_seq_len,
-                            diverse = FALSE, diversity_candidates = NULL) {
+                            diverse = FALSE, diversity_candidates = NULL,
+                            seed = NULL) {
   available_idx <- as.integer(available_idx)
   texts_sub <- pool_texts[available_idx]
   scores <- unlist(py$al_score(
@@ -714,7 +750,8 @@ plot.conflibert_al_session <- function(
   } else {
     .al_pick_diverse(
       py, trained, texts_sub, scores, k,
-      as.integer(diversity_candidates), as.integer(max_seq_len)
+      as.integer(diversity_candidates), as.integer(max_seq_len),
+      seed = seed
     )
   }
 
@@ -730,7 +767,8 @@ plot.conflibert_al_session <- function(
 
 
 .al_pick_diverse <- function(py, trained, texts_sub, scores, k,
-                              diversity_candidates, max_seq_len) {
+                              diversity_candidates, max_seq_len,
+                              seed = NULL) {
   n_cand <- min(max(diversity_candidates, k), length(texts_sub))
   cand_local <- order(scores, decreasing = TRUE)[seq_len(n_cand)]
   if (n_cand == k) return(cand_local)
@@ -752,10 +790,13 @@ plot.conflibert_al_session <- function(
   if (!is.matrix(emb)) emb <- as.matrix(emb)
   if (nrow(emb) < k) return(cand_local[seq_len(nrow(emb))])
 
-  km <- tryCatch(
+  # k-means uses random initialization; seed it so diverse query
+  # selection is reproducible. .al_with_seed restores the caller's RNG
+  # state afterwards, so the user's global random stream is untouched.
+  km <- .al_with_seed(seed, tryCatch(
     stats::kmeans(emb, centers = k, nstart = 5, iter.max = 50),
     error = function(e) NULL
-  )
+  ))
   if (is.null(km)) {
     warning("k-means failed; falling back to top-uncertainty picks.",
             call. = FALSE)

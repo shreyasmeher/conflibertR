@@ -21,6 +21,46 @@ test_that("active learning input checks fire", {
   )
 })
 
+test_that("training entry points expose a seed argument (default 42)", {
+  # conflibert_active_start already uses `seed` for the labeled starter
+  # set, so its reproducibility knob is named `random_seed`.
+  knobs <- list(
+    conflibert_finetune     = "seed",
+    conflibert_compare      = "seed",
+    conflibert_active_start = "random_seed"
+  )
+  for (nm in names(knobs)) {
+    fmls <- formals(get(nm))
+    arg <- knobs[[nm]]
+    expect_true(arg %in% names(fmls), info = nm)
+    expect_equal(eval(fmls[[arg]]), 42, info = nm)
+  }
+})
+
+test_that(".al_with_seed is reproducible and restores the RNG state", {
+  with_seed <- conflibertR:::.al_with_seed
+
+  # same seed -> same draw
+  a <- with_seed(123, runif(3))
+  b <- with_seed(123, runif(3))
+  expect_equal(a, b)
+
+  # NULL seed leaves expr untouched (just returns its value)
+  expect_equal(with_seed(NULL, 42L), 42L)
+
+  # the caller's global RNG stream is not disturbed
+  set.seed(999)
+  before <- .Random.seed
+  invisible(with_seed(7, runif(5)))
+  expect_identical(.Random.seed, before)
+  # and the next draw matches what it would have been with no seeded call
+  set.seed(999)
+  expected_next <- runif(2)
+  set.seed(999)
+  invisible(with_seed(7, runif(5)))
+  expect_equal(runif(2), expected_next)
+})
+
 test_that("conflibert_models lists the supported architectures", {
   m <- conflibert_models()
   expect_true("ConfliBERT" %in% m)
