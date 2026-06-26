@@ -14,10 +14,11 @@
 #' @examples
 #' \dontrun{
 #' # Save during fine-tuning
-#' conflibert_finetune(train, dev, test, save_dir = "my_model")
+#' dir <- file.path(tempdir(), "my_model")
+#' conflibert_finetune(train, dev, test, save_dir = dir)
 #'
 #' # Reload later and predict
-#' clf <- conflibert_load("my_model")
+#' clf <- conflibert_load(dir)
 #' predict(clf, c("Troops advanced on the capital.", "Nice weather."))
 #' }
 conflibert_load <- function(dir) {

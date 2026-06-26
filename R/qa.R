@@ -5,6 +5,15 @@
 #' questions in one call, or a single context with several questions
 #' (scalars are recycled).
 #'
+#' The published question-answering checkpoint ships only 'TensorFlow'
+#' weights. The first call converts them to 'PyTorch' once and caches the
+#' result under \code{~/.cache/conflibertR} (or \code{$XDG_CACHE_HOME} when
+#' set); subsequent calls reuse the cache and never touch 'TensorFlow'
+#' again. Downloaded 'Hugging Face' models are cached under \code{$HF_HOME}
+#' (default \code{~/.cache/huggingface}). Both caches are written only on
+#' explicit, network-enabled calls, and can be relocated by setting those
+#' environment variables.
+#'
 #' @param context Character vector of passages.
 #' @param question Character vector of questions.
 #' @param details If \code{TRUE}, return a tibble with the answer plus

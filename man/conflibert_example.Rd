@@ -33,11 +33,12 @@ data frames ready to pass to \code{\link{conflibert_finetune}} or
 \code{\link{conflibert_compare}}.
 }
 \examples{
-\dontrun{
+# Loading the bundled data is pure R and needs no Python backend:
 data <- conflibert_example("binary")
 data$train
 
-# Fine-tune with example data
+\dontrun{
+# Fine-tune with example data (needs the Python backend)
 result <- conflibert_finetune(
   train = data$train, dev = data$dev, test = data$test,
   model = "ConfliBERT", task = "binary", epochs = 1

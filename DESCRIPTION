@@ -1,22 +1,27 @@
 Package: conflibertR
-Title: ConfliBERT Inference and Fine-Tuning for Conflict and Political Violence Text
+Title: Inference and Fine-Tuning with 'ConfliBERT' Conflict Text Models
 Version: 0.5.1
 Authors@R: person("Shreyas", "Meher", email = "shreyasmeher@gmail.com",
-    role = c("aut", "cre"))
-Description: R interface to ConfliBERT, a pretrained language model for
-    conflict and political violence text analysis. Provides functions for
-    named entity recognition, binary classification, multilabel
-    classification, and question answering. Also supports fine-tuning
-    custom classifiers, comparing multiple base model architectures,
-    and an interactive active-learning loop for efficiently labeling
-    new data. Models are loaded from HuggingFace via the Python
-    transformers library through reticulate.
+    role = c("aut", "cre"), comment = c(ORCID = "0000-0002-9656-4374"))
+Description: An R interface to 'ConfliBERT', a pretrained language model for
+    analyzing text about conflict and political violence (Hu et al. (2022)
+    <doi:10.18653/v1/2022.naacl-main.400>). Provides functions for named
+    entity recognition, binary and multilabel classification, and question
+    answering, plus tools to fine-tune custom classifiers, compare several
+    base model architectures, and run an interactive active-learning loop
+    for efficiently labeling new data. Models are downloaded from
+    'Hugging Face' and run through the 'transformers' library for 'Python'
+    via the 'reticulate' package.
 License: MIT + file LICENSE
 URL: https://github.com/shreyasmeher/conflibertR
 BugReports: https://github.com/shreyasmeher/conflibertR/issues
 Encoding: UTF-8
+Language: en
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
+SystemRequirements: Python (>= 3.8); the Python modules 'torch',
+    'transformers' (>= 4.40), 'accelerate', 'peft', 'scikit-learn' and
+    'numpy', installable via conflibert_install()
 Imports:
     cli,
     reticulate (>= 1.34),

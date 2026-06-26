@@ -1,7 +1,10 @@
-"""ConfliBERT inference module for the R package.
+"""ConfliBERT inference module for the conflibertR R package.
 
 Models are loaded lazily and cached so the first call to each task
 downloads and loads the model, and subsequent calls reuse it.
+
+Part of the conflibertR R package. Copyright (c) 2025 Shreyas Meher.
+Released under the MIT License (see the package LICENSE file).
 """
 
 import os

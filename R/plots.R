@@ -29,10 +29,12 @@ utils::globalVariables(c(".data", "panel", "doc"))
 #' @return A ggplot2 theme object.
 #' @export
 #' @examples
-#' \dontrun{
-#' ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) +
-#'   ggplot2::geom_point(colour = "#0ea5e9", size = 3) +
-#'   theme_conflibert(grid = "y")
+#' \donttest{
+#' if (requireNamespace("ggplot2", quietly = TRUE)) {
+#'   ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg)) +
+#'     ggplot2::geom_point(colour = "#0ea5e9", size = 3) +
+#'     theme_conflibert(grid = "y")
+#' }
 #' }
 theme_conflibert <- function(base_size = 12, base_family = "",
                              grid = c("xy", "x", "y", "none")) {

@@ -32,6 +32,11 @@ As of conflibertR 0.5.0 the backend is PyTorch-only: TensorFlow is no
 longer required, which makes installation considerably smaller and
 more reliable. If you have issues with the default virtualenv method,
 try \code{method = "conda"} instead.
+
+Models downloaded from 'Hugging Face' are cached under
+\code{$HF_HOME} (default \code{~/.cache/huggingface}) and the converted
+QA weights under \code{~/.cache/conflibertR} (or \code{$XDG_CACHE_HOME}).
+Set those environment variables to relocate the caches.
 }
 \examples{
 \dontrun{
