@@ -18,9 +18,10 @@ non-evaluated, so R CMD check never downloads a model or starts Python.
 
 ## Test environments
 
-- local: macOS, R 4.4.1
-- win-builder: R-devel and R-release
-- (add R-hub results here if used)
+- local: macOS (aarch64), R 4.4.1
+- GitHub Actions: macOS-latest (release), windows-latest (release),
+  ubuntu-latest (R-devel, release, oldrel-1) -- all passing
+- win-builder: R-devel and R-release (pending; add results before submitting)
 
 ## R CMD check results
 
@@ -33,6 +34,11 @@ non-evaluated, so R CMD check never downloads a model or starts Python.
 The only NOTE is the expected "New submission". A local-only
 "unable to verify current time" NOTE can appear on machines with an
 unsynchronized clock and does not occur on CRAN's infrastructure.
+
+Any "possibly misspelled words" flagged in the DESCRIPTION are technical
+terms and proper nouns spelled correctly (e.g. 'ConfliBERT', 'reticulate',
+'pretrained', 'multilabel', 'Hugging Face'); they are listed in
+inst/WORDLIST.
 
 ## Downstream dependencies
 
