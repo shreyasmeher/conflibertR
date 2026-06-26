@@ -457,8 +457,14 @@ def finetune(
     test_texts, test_labels, model_name="ConfliBERT",
     task="binary", epochs=3, batch_size=8, lr=2e-5,
     save_dir=None, use_lora=False, lora_rank=8, lora_alpha=16,
+    seed=42,
 ):
     """Fine-tune a classification model and evaluate on the test set.
+
+    `seed` seeds Python, NumPy, and PyTorch so the random classifier-head
+    initialization, data shuffling, and dropout are reproducible: two runs
+    with the same seed on the same hardware and library versions produce
+    the same model and metrics.
 
     Returns a dict with metrics, runtime, predictions, probabilities,
     true_labels, and model_dir.
@@ -469,7 +475,13 @@ def finetune(
         TrainingArguments,
         Trainer,
         EarlyStoppingCallback,
+        set_seed,
     )
+
+    # seed before the model is built so the randomly initialized
+    # classification head is reproducible (the Trainer only re-seeds at
+    # train() time, after the head already exists)
+    set_seed(int(seed))
 
     model_id = MODEL_MAP.get(model_name, model_name)
     train_texts = list(train_texts)
@@ -520,7 +532,7 @@ def finetune(
         greater_is_better=True,
         save_total_limit=1,
         report_to="none",
-        seed=42,
+        seed=int(seed),
     )
 
     trainer = Trainer(
@@ -568,9 +580,12 @@ def compare(
     train_texts, train_labels, dev_texts, dev_labels,
     test_texts, test_labels, model_names,
     task="binary", epochs=3, batch_size=8, lr=2e-5,
-    use_lora=False, lora_rank=8, lora_alpha=16,
+    use_lora=False, lora_rank=8, lora_alpha=16, seed=42,
 ):
     """Fine-tune multiple models on the same data and compare performance.
+
+    Every model is trained from the same `seed`, so the comparison is
+    reproducible run to run.
 
     Returns a list of dicts, one per model, each with 'model', metrics, and
     'runtime' keys.
@@ -587,6 +602,7 @@ def compare(
                 model_name=name, task=task,
                 epochs=epochs, batch_size=batch_size, lr=lr,
                 use_lora=use_lora, lora_rank=lora_rank, lora_alpha=lora_alpha,
+                seed=seed,
             )
             row = {"model": name, "runtime": result["runtime"]}
             row.update(result["metrics"])
@@ -668,9 +684,11 @@ def al_train(
     texts, labels, num_labels, model_name="ConfliBERT",
     epochs=3, batch_size=8, lr=2e-5, max_seq_len=512,
     dev_texts=None, dev_labels=None, task="binary",
-    use_lora=False, lora_rank=8, lora_alpha=16,
+    use_lora=False, lora_rank=8, lora_alpha=16, seed=42,
 ):
     """Train one active-learning round on the given labeled data.
+
+    `seed` makes each round's training reproducible (see `finetune`).
 
     Returns a dict with keys: model, tokenizer, metrics, runtime.
     The model/tokenizer are raw Python objects kept on CPU; callers are
@@ -681,7 +699,10 @@ def al_train(
         AutoModelForSequenceClassification,
         TrainingArguments,
         Trainer,
+        set_seed,
     )
+
+    set_seed(int(seed))
 
     model_id = MODEL_MAP.get(model_name, model_name)
     texts = list(texts)
@@ -725,7 +746,7 @@ def al_train(
         save_strategy="no",
         logging_steps=50,
         report_to="none",
-        seed=42,
+        seed=int(seed),
     )
 
     trainer = Trainer(

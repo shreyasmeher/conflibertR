@@ -1,3 +1,21 @@
+# conflibertR 0.5.1
+
+## Reproducibility
+
+- `conflibert_finetune()`, `conflibert_compare()`, and
+  `conflibert_active_start()` gained a `seed` argument (default 42).
+  It seeds the classifier-head initialization, data shuffling, and
+  dropout, so two runs with the same seed on the same hardware and
+  package versions produce identical models and metrics. Change the
+  seed to study run-to-run variability.
+- Diverse active-learning query selection (`diverse = TRUE`) is now
+  reproducible: the k-means clustering it uses is seeded from the
+  session's `seed`, and the user's global RNG state is restored
+  afterwards so nothing downstream is disturbed.
+- Inference (`conflibert_classify()`, `conflibert_multilabel()`,
+  `conflibert_ner()`, `conflibert_qa()`) was already deterministic
+  (a plain forward pass with no sampling) and is unchanged.
+
 # conflibertR 0.5.0
 
 ## Easier setup
