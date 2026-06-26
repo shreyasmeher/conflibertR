@@ -21,24 +21,26 @@ non-evaluated, so R CMD check never downloads a model or starts Python.
 - local: macOS (aarch64), R 4.4.1
 - GitHub Actions: macOS-latest (release), windows-latest (release),
   ubuntu-latest (R-devel, release, oldrel-1) -- all passing
-- win-builder: R-devel and R-release (pending; add results before submitting)
+- win-builder: R-devel (2026-06-25 r90191) and R-release (4.6.1) --
+  0 errors, 0 warnings, 1 note on both
 
 ## R CMD check results
 
 0 errors | 0 warnings | 1 note
 
+On win-builder the single NOTE is:
+
 * checking CRAN incoming feasibility ... NOTE
-  Maintainer: 'Shreyas Meher <shreyasmeher@gmail.com>'
-  New submission
+  Possibly misspelled words in DESCRIPTION:
+    Hu (7:59) al (7:65) et (7:62) multilabel (9:36) pretrained (6:48)
 
-The only NOTE is the expected "New submission". A local-only
-"unable to verify current time" NOTE can appear on machines with an
-unsynchronized clock and does not occur on CRAN's infrastructure.
+These are spelled correctly: "Hu" is an author surname, "et al" is the
+standard Latin citation form, and "multilabel"/"pretrained" are technical
+terms. They are listed in inst/WORDLIST.
 
-Any "possibly misspelled words" flagged in the DESCRIPTION are technical
-terms and proper nouns spelled correctly (e.g. 'ConfliBERT', 'reticulate',
-'pretrained', 'multilabel', 'Hugging Face'); they are listed in
-inst/WORDLIST.
+On submission CRAN will additionally show the standard "New submission"
+NOTE. (A local-only "unable to verify current time" NOTE can appear on a
+machine with an unsynchronized clock and does not occur on CRAN.)
 
 ## Downstream dependencies
 
