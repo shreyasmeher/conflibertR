@@ -7,13 +7,11 @@
 #' @param labels Integer vector of true labels (0 or 1).
 #' @return A tibble with one row and columns: accuracy, precision, recall, f1, n.
 #' @export
-#' @examples
-#' \dontrun{
+#' @examplesIf conflibert_available()
 #' conflibert_benchmark(
 #'   texts  = c("A bomb exploded.", "The weather was nice."),
 #'   labels = c(1L, 0L)
 #' )
-#' }
 conflibert_benchmark <- function(texts, labels) {
   stopifnot(is.character(texts), length(texts) == length(labels))
   py <- .get_py()

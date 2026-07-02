@@ -19,7 +19,7 @@ used. Prints a checklist and gives specific advice when something is
 missing.
 }
 \examples{
-\dontrun{
+\dontshow{if (conflibert_available()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 conflibert_status()
-}
+\dontshow{\}) # examplesIf}
 }

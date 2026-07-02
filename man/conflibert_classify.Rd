@@ -26,12 +26,12 @@ the pretrained ConfliBERT binary classifier. Inference is batched, so
 long vectors are fast; a progress bar appears for large inputs.
 }
 \examples{
-\dontrun{
+\dontshow{if (conflibert_available()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 conflibert_classify("A bomb exploded in the market.")
 
 conflibert_classify(c(
   "Government troops clashed with rebels.",
   "The weather was sunny and warm."
 ))
-}
+\dontshow{\}) # examplesIf}
 }

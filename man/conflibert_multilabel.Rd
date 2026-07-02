@@ -26,7 +26,7 @@ Bombing or Explosion, Kidnapping, and Other. Each category is
 scored independently. Inference is batched.
 }
 \examples{
-\dontrun{
+\dontshow{if (conflibert_available()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 conflibert_multilabel("Insurgents kidnapped two aid workers near the border.")
-}
+\dontshow{\}) # examplesIf}
 }

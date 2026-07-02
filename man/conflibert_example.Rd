@@ -37,8 +37,9 @@ data frames ready to pass to \code{\link{conflibert_finetune}} or
 data <- conflibert_example("binary")
 data$train
 
-\dontrun{
+\dontshow{if (conflibert_available()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 # Fine-tune with example data (needs the Python backend)
+data <- conflibert_example("binary")
 result <- conflibert_finetune(
   train = data$train, dev = data$dev, test = data$test,
   model = "ConfliBERT", task = "binary", epochs = 1
@@ -50,5 +51,5 @@ comparison <- conflibert_compare(
   models = c("ConfliBERT", "BERT Base Uncased"),
   task = "binary", epochs = 1
 )
-}
+\dontshow{\}) # examplesIf}
 }

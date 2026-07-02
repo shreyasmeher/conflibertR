@@ -1,3 +1,23 @@
+# conflibertR 0.5.2
+
+CRAN resubmission with review feedback addressed. No user-facing API
+changes.
+
+- New `conflibert_available()`: a cheap check for whether the
+  'conflibert' Python environment and its core modules are usable. It
+  now guards all backend-dependent examples (they run wherever the
+  backend is installed and are skipped elsewhere, e.g. on CRAN), and it
+  is exported so your own scripts can degrade gracefully.
+- Examples were rewritten to be self-contained and executable against
+  the bundled datasets; `\dontrun{}` remains only on
+  `conflibert_install()`, which installs software.
+- Diverse active-learning query selection (`diverse = TRUE`) now starts
+  k-means from deterministic farthest-first centers instead of seeded
+  random starts, so it is reproducible without reading or modifying the
+  user's `.Random.seed` (the package no longer touches the global
+  environment at all). Query selection remains reproducible; the exact
+  clusters may differ slightly from 0.5.1.
+
 # conflibertR 0.5.1
 
 ## Reproducibility

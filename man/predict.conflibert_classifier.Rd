@@ -27,8 +27,14 @@ Run batched inference with a classifier loaded via
 confidence, and one \code{prob_*} column per class.
 }
 \examples{
-\dontrun{
-clf <- conflibert_load("my_model")
+\dontshow{if (conflibert_available()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+data <- conflibert_example("binary")
+dir <- file.path(tempdir(), "my_model")
+conflibert_finetune(
+  train = data$train, dev = data$dev, test = data$test,
+  epochs = 1, save_dir = dir
+)
+clf <- conflibert_load(dir)
 predict(clf, c("Bomb exploded.", "Stock market rose."))
-}
+\dontshow{\}) # examplesIf}
 }

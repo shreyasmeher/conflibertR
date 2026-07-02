@@ -62,15 +62,16 @@ comparison table of test-set metrics. Useful for selecting the best
 architecture for your data.
 }
 \examples{
-\dontrun{
+\dontshow{if (conflibert_available()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+data <- conflibert_example("binary")
 comparison <- conflibert_compare(
-  train  = train_df,
-  dev    = dev_df,
-  test   = test_df,
-  models = c("ConfliBERT", "BERT Base Uncased", "RoBERTa Base"),
+  train  = data$train,
+  dev    = data$dev,
+  test   = data$test,
+  models = c("ConfliBERT", "BERT Base Uncased"),
   task   = "binary",
-  epochs = 3
+  epochs = 1
 )
 comparison
-}
+\dontshow{\}) # examplesIf}
 }

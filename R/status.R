@@ -1,3 +1,48 @@
+#' Is the ConfliBERT Python Backend Available?
+#'
+#' Returns \code{TRUE} when the \code{"conflibert"} Python environment
+#' exists and the core Python modules ('torch' and 'transformers') can
+#' be imported. It never installs anything, and when no environment is
+#' found it returns \code{FALSE} without initializing Python, so it is
+#' cheap and safe to call on any system. It is used to guard the
+#' package's examples on machines without the backend (such as CRAN's
+#' check machines), and you can use it the same way in scripts that
+#' should degrade gracefully.
+#'
+#' Set the environment variable \code{CONFLIBERTR_AVAILABLE} to
+#' \code{"true"} or \code{"false"} to override the detection, e.g. to
+#' skip the backend-dependent examples during \code{R CMD check} on a
+#' machine that has the backend installed.
+#'
+#' @return \code{TRUE} or \code{FALSE}.
+#' @export
+#' @examples
+#' conflibert_available()
+conflibert_available <- function() {
+  override <- Sys.getenv("CONFLIBERTR_AVAILABLE", "")
+  if (nzchar(override)) {
+    return(isTRUE(as.logical(override)))
+  }
+  conda_envs <- tryCatch(reticulate::conda_list(), error = function(e) NULL)
+  conda_found <- !is.null(conda_envs) && "conflibert" %in% conda_envs$name
+  venv_found <- tryCatch(
+    reticulate::virtualenv_exists("conflibert"),
+    error = function(e) FALSE
+  )
+  if (!conda_found && !venv_found) {
+    return(FALSE)
+  }
+  all(vapply(
+    c("torch", "transformers"),
+    function(mod) {
+      tryCatch(reticulate::py_module_available(mod),
+               error = function(e) FALSE)
+    },
+    logical(1)
+  ))
+}
+
+
 #' Check the conflibertR Setup
 #'
 #' Run a quick diagnostic of the Python backend: whether the
@@ -10,10 +55,8 @@
 #'   \code{packages} (named logical vector), \code{device}, and
 #'   \code{ok}.
 #' @export
-#' @examples
-#' \dontrun{
+#' @examplesIf conflibert_available()
 #' conflibert_status()
-#' }
 conflibert_status <- function() {
   cli::cli_rule(left = cli::style_bold("conflibertR status"))
 

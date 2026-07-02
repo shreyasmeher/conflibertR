@@ -21,8 +21,12 @@ is a standard HuggingFace checkpoint that can be reloaded with any
 \code{transformers} tool.
 }
 \examples{
-\dontrun{
+\dontshow{if (conflibert_available()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+data <- conflibert_example("active")
+session <- conflibert_active_start(
+  seed = data$seed, pool = data$pool, query_size = 5, epochs = 1
+)
 dir <- file.path(tempdir(), "my_al_model")
 conflibert_active_save(session, dir)
-}
+\dontshow{\}) # examplesIf}
 }

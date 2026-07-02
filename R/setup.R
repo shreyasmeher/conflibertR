@@ -27,6 +27,9 @@
 #' @export
 #' @examples
 #' \dontrun{
+#' # Not run automatically anywhere: this installs software (it creates
+#' # a Python environment and downloads several GB of dependencies), so
+#' # it must only ever be run deliberately by the user.
 #' conflibert_install()
 #'
 #' # Include TensorFlow for the one-time QA weight conversion:

@@ -39,7 +39,7 @@ explicit, network-enabled calls, and can be relocated by setting those
 environment variables.
 }
 \examples{
-\dontrun{
+\dontshow{if (conflibert_available()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 conflibert_qa(
   context  = "The ceasefire was signed in Geneva on March 15th.",
   question = "Where was the ceasefire signed?"
@@ -52,5 +52,5 @@ conflibert_qa(
                "When was the ceasefire signed?"),
   details  = TRUE
 )
-}
+\dontshow{\}) # examplesIf}
 }

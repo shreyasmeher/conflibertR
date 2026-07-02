@@ -17,15 +17,13 @@
 #'       the entity in the input text (use with \code{substr()}).}
 #'   }
 #' @export
-#' @examples
-#' \dontrun{
+#' @examplesIf conflibert_available()
 #' conflibert_ner("The soldiers attacked the village near Kabul.")
 #'
 #' conflibert_ner(c(
 #'   "NATO forces were deployed to the region.",
 #'   "The UN Security Council met in New York."
 #' ))
-#' }
 conflibert_ner <- function(text) {
   stopifnot(is.character(text), length(text) >= 1)
   py <- .get_py()

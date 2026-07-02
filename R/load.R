@@ -11,16 +11,18 @@
 #'   with \code{model}, \code{tokenizer}, \code{num_labels}, and
 #'   \code{dir}.
 #' @export
-#' @examples
-#' \dontrun{
-#' # Save during fine-tuning
+#' @examplesIf conflibert_available()
+#' # Fine-tune on the bundled example data, saving the model...
+#' data <- conflibert_example("binary")
 #' dir <- file.path(tempdir(), "my_model")
-#' conflibert_finetune(train, dev, test, save_dir = dir)
+#' conflibert_finetune(
+#'   train = data$train, dev = data$dev, test = data$test,
+#'   epochs = 1, save_dir = dir
+#' )
 #'
-#' # Reload later and predict
+#' # ...then reload it later and predict
 #' clf <- conflibert_load(dir)
 #' predict(clf, c("Troops advanced on the capital.", "Nice weather."))
-#' }
 conflibert_load <- function(dir) {
   dir <- path.expand(dir)
   if (!dir.exists(dir)) {
@@ -53,11 +55,15 @@ conflibert_load <- function(dir) {
 #' @return A tibble with \code{text}, \code{class}, \code{confidence},
 #'   and \code{prob_0..prob_{K-1}} columns.
 #' @export
-#' @examples
-#' \dontrun{
-#' clf <- conflibert_load("my_model")
+#' @examplesIf conflibert_available()
+#' data <- conflibert_example("binary")
+#' dir <- file.path(tempdir(), "my_model")
+#' conflibert_finetune(
+#'   train = data$train, dev = data$dev, test = data$test,
+#'   epochs = 1, save_dir = dir
+#' )
+#' clf <- conflibert_load(dir)
 #' predict(clf, c("Bomb exploded.", "Stock market rose."))
-#' }
 predict.conflibert_classifier <- function(
     object, text, batch_size = 32, max_seq_len = 512, ...
 ) {

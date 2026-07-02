@@ -25,10 +25,14 @@ current query, retrains the model on the full labeled set, and
 selects the next uncertain batch from the remaining pool.
 }
 \examples{
-\dontrun{
-session <- conflibert_active_start(seed, pool)
-labels  <- my_labeling_fn(session$query$text)
+\dontshow{if (conflibert_available()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+data <- conflibert_example("active")
+session <- conflibert_active_start(
+  seed = data$seed, pool = data$pool, query_size = 5, epochs = 1
+)
+# label the queried texts (here using the bundled oracle labels)
+labels  <- unname(data$pool_labels[session$query$text])
 session <- conflibert_active_next(session, labels)
 session$metrics
-}
+\dontshow{\}) # examplesIf}
 }

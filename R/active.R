@@ -44,30 +44,23 @@
 #' @param lora_alpha LoRA alpha. Default: 16.
 #' @param random_seed Random seed for reproducibility (named to avoid a
 #'   clash with the labeled \code{seed} set above). Seeds each round's
-#'   model training and, when \code{diverse = TRUE}, the k-means
-#'   clustering used to pick a diverse query, so re-running the whole
-#'   session on the same hardware and package versions reproduces the
-#'   same queries and metrics. It is stored in the session and reused by
-#'   \code{\link{conflibert_active_next}}. Default: 42.
+#'   model training, so re-running the whole session on the same
+#'   hardware and package versions reproduces the same queries and
+#'   metrics. (Diverse query selection with \code{diverse = TRUE} is
+#'   deterministic and needs no seed.) It is stored in the session and
+#'   reused by \code{\link{conflibert_active_next}}. Default: 42.
 #' @return An object of class \code{"conflibert_al_session"}: a list
 #'   with \code{query} (tibble of texts to label), \code{metrics}
 #'   (tibble of metrics across rounds), \code{round}, \code{labeled_n},
 #'   \code{pool_n}, \code{done}, and internal state.
 #' @export
-#' @examples
-#' \dontrun{
-#' seed <- data.frame(
-#'   text  = c("Troops advanced.", "Nice weather today."),
-#'   label = c(1L, 0L)
-#' )
-#' pool <- c("Car bomb exploded.", "New coffee shop opened.", "...")
-#'
+#' @examplesIf conflibert_available()
+#' data <- conflibert_example("active")
 #' session <- conflibert_active_start(
-#'   seed = seed, pool = pool, query_size = 5, epochs = 1
+#'   seed = data$seed, pool = data$pool, query_size = 5, epochs = 1
 #' )
 #' session
 #' session$query
-#' }
 conflibert_active_start <- function(
     seed, pool, dev = NULL,
     model = "ConfliBERT", task = c("binary", "multiclass"),
@@ -126,8 +119,7 @@ conflibert_active_start <- function(
     available_idx = seq_along(pool_texts),
     strategy = strategy, query_size = query_size,
     max_seq_len = max_seq_len,
-    diverse = isTRUE(diverse), diversity_candidates = dc,
-    seed = random_seed
+    diverse = isTRUE(diverse), diversity_candidates = dc
   )
   round_metrics <- .al_round_row(
     0L, length(seed_texts), trained$metrics, query$tibble$uncertainty
@@ -184,13 +176,15 @@ conflibert_active_start <- function(
 #'   exhausted, \code{session$done} is \code{TRUE} and
 #'   \code{session$query} is empty.
 #' @export
-#' @examples
-#' \dontrun{
-#' session <- conflibert_active_start(seed, pool)
-#' labels  <- my_labeling_fn(session$query$text)
+#' @examplesIf conflibert_available()
+#' data <- conflibert_example("active")
+#' session <- conflibert_active_start(
+#'   seed = data$seed, pool = data$pool, query_size = 5, epochs = 1
+#' )
+#' # label the queried texts (here using the bundled oracle labels)
+#' labels  <- unname(data$pool_labels[session$query$text])
 #' session <- conflibert_active_next(session, labels)
 #' session$metrics
-#' }
 conflibert_active_next <- function(session, labels) {
   stopifnot(inherits(session, "conflibert_al_session"))
   if (isTRUE(session$done)) {
@@ -262,8 +256,7 @@ conflibert_active_next <- function(session, labels) {
     strategy = p$strategy, query_size = p$query_size,
     max_seq_len = p$max_seq_len,
     diverse = isTRUE(p$diverse),
-    diversity_candidates = as.integer(p$diversity_candidates),
-    seed = as.integer(p$seed)
+    diversity_candidates = as.integer(p$diversity_candidates)
   )
   round_row <- .al_round_row(
     session$round, length(st$labeled_texts), trained$metrics,
@@ -305,11 +298,13 @@ conflibert_active_next <- function(session, labels) {
 #' @return An integer vector of labels (one per query row), or
 #'   \code{NULL} if the user cancels.
 #' @export
-#' @examples
-#' \dontrun{
+#' @examplesIf interactive() && conflibert_available()
+#' data <- conflibert_example("active")
+#' session <- conflibert_active_start(
+#'   seed = data$seed, pool = data$pool, query_size = 5, epochs = 1
+#' )
 #' labels  <- conflibert_active_label(session)
 #' session <- conflibert_active_next(session, labels)
-#' }
 conflibert_active_label <- function(session, classes = NULL) {
   stopifnot(inherits(session, "conflibert_al_session"))
   if (!interactive()) {
@@ -452,11 +447,13 @@ conflibert_active_label <- function(session, classes = NULL) {
 #'   not exist.
 #' @return The directory path, invisibly.
 #' @export
-#' @examples
-#' \dontrun{
+#' @examplesIf conflibert_available()
+#' data <- conflibert_example("active")
+#' session <- conflibert_active_start(
+#'   seed = data$seed, pool = data$pool, query_size = 5, epochs = 1
+#' )
 #' dir <- file.path(tempdir(), "my_al_model")
 #' conflibert_active_save(session, dir)
-#' }
 conflibert_active_save <- function(session, dir) {
   stopifnot(inherits(session, "conflibert_al_session"))
   if (is.null(session$.state$model)) {
@@ -676,25 +673,22 @@ plot.conflibert_al_session <- function(
 
 # ---- internal helpers -------------------------------------------------
 
-# Evaluate `expr` with the RNG seeded to `seed`, then restore whatever
-# RNG state the caller had (or remove .Random.seed if there was none).
-# When `seed` is NULL, `expr` runs untouched. Used to make seeded steps
-# (e.g. k-means) reproducible without clobbering the user's random stream.
-.al_with_seed <- function(seed, expr) {
-  if (is.null(seed)) {
-    return(expr)
+# Deterministic starting centers for k-means: a farthest-first traversal
+# anchored at the top-uncertainty candidate (row 1). Avoids the RNG that
+# stats::kmeans() uses for random starts, so diverse query selection is
+# reproducible without touching .Random.seed. If the embeddings have
+# fewer than k distinct rows, fewer centers are returned; the caller's
+# empty-cluster fallback handles the difference.
+.al_kmeans_centers <- function(emb, k) {
+  chosen <- 1L
+  d2 <- colSums((t(emb) - emb[1L, ])^2)
+  while (length(chosen) < k) {
+    nxt <- which.max(d2)
+    if (d2[nxt] <= 0) break
+    chosen <- c(chosen, nxt)
+    d2 <- pmin(d2, colSums((t(emb) - emb[nxt, ])^2))
   }
-  if (exists(".Random.seed", envir = .GlobalEnv)) {
-    old_seed <- get(".Random.seed", envir = .GlobalEnv)
-    on.exit(assign(".Random.seed", old_seed, envir = .GlobalEnv), add = TRUE)
-  } else {
-    on.exit(
-      suppressWarnings(rm(".Random.seed", envir = .GlobalEnv)),
-      add = TRUE
-    )
-  }
-  set.seed(as.integer(seed))
-  expr
+  emb[chosen, , drop = FALSE]
 }
 
 .al_check_labeled <- function(df, name) {
@@ -737,8 +731,7 @@ plot.conflibert_al_session <- function(
 
 .al_pick_query <- function(py, trained, pool_texts, available_idx,
                             strategy, query_size, max_seq_len,
-                            diverse = FALSE, diversity_candidates = NULL,
-                            seed = NULL) {
+                            diverse = FALSE, diversity_candidates = NULL) {
   available_idx <- as.integer(available_idx)
   texts_sub <- pool_texts[available_idx]
   scores <- unlist(py$al_score(
@@ -755,8 +748,7 @@ plot.conflibert_al_session <- function(
   } else {
     .al_pick_diverse(
       py, trained, texts_sub, scores, k,
-      as.integer(diversity_candidates), as.integer(max_seq_len),
-      seed = seed
+      as.integer(diversity_candidates), as.integer(max_seq_len)
     )
   }
 
@@ -772,8 +764,7 @@ plot.conflibert_al_session <- function(
 
 
 .al_pick_diverse <- function(py, trained, texts_sub, scores, k,
-                              diversity_candidates, max_seq_len,
-                              seed = NULL) {
+                              diversity_candidates, max_seq_len) {
   n_cand <- min(max(diversity_candidates, k), length(texts_sub))
   cand_local <- order(scores, decreasing = TRUE)[seq_len(n_cand)]
   if (n_cand == k) return(cand_local)
@@ -795,13 +786,14 @@ plot.conflibert_al_session <- function(
   if (!is.matrix(emb)) emb <- as.matrix(emb)
   if (nrow(emb) < k) return(cand_local[seq_len(nrow(emb))])
 
-  # k-means uses random initialization; seed it so diverse query
-  # selection is reproducible. .al_with_seed restores the caller's RNG
-  # state afterwards, so the user's global random stream is untouched.
-  km <- .al_with_seed(seed, tryCatch(
-    stats::kmeans(emb, centers = k, nstart = 5, iter.max = 50),
+  # stats::kmeans() with random starts would need set.seed() and hence
+  # touching the user's .Random.seed; starting it from deterministic
+  # farthest-first centers keeps diverse query selection reproducible
+  # without reading or writing any RNG state.
+  km <- tryCatch(
+    stats::kmeans(emb, centers = .al_kmeans_centers(emb, k), iter.max = 50),
     error = function(e) NULL
-  ))
+  )
   if (is.null(km)) {
     warning("k-means failed; falling back to top-uncertainty picks.",
             call. = FALSE)

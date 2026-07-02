@@ -22,13 +22,17 @@ Load a classifier saved by \code{\link{conflibert_finetune}}
 object you can pass to \code{\link[=predict.conflibert_classifier]{predict}}.
 }
 \examples{
-\dontrun{
-# Save during fine-tuning
+\dontshow{if (conflibert_available()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+# Fine-tune on the bundled example data, saving the model...
+data <- conflibert_example("binary")
 dir <- file.path(tempdir(), "my_model")
-conflibert_finetune(train, dev, test, save_dir = dir)
+conflibert_finetune(
+  train = data$train, dev = data$dev, test = data$test,
+  epochs = 1, save_dir = dir
+)
 
-# Reload later and predict
+# ...then reload it later and predict
 clf <- conflibert_load(dir)
 predict(clf, c("Troops advanced on the capital.", "Nice weather."))
-}
+\dontshow{\}) # examplesIf}
 }

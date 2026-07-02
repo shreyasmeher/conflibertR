@@ -28,12 +28,12 @@ types in text using the pretrained ConfliBERT NER model. Inference is
 batched, and printing highlights each entity in its source sentence.
 }
 \examples{
-\dontrun{
+\dontshow{if (conflibert_available()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 conflibert_ner("The soldiers attacked the village near Kabul.")
 
 conflibert_ner(c(
   "NATO forces were deployed to the region.",
   "The UN Security Council met in New York."
 ))
-}
+\dontshow{\}) # examplesIf}
 }

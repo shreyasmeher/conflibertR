@@ -70,11 +70,11 @@ cluster when \code{diverse = TRUE}. Default: \code{3 * query_size}.}
 
 \item{random_seed}{Random seed for reproducibility (named to avoid a
 clash with the labeled \code{seed} set above). Seeds each round's
-model training and, when \code{diverse = TRUE}, the k-means
-clustering used to pick a diverse query, so re-running the whole
-session on the same hardware and package versions reproduces the
-same queries and metrics. It is stored in the session and reused by
-\code{\link{conflibert_active_next}}. Default: 42.}
+model training, so re-running the whole session on the same
+hardware and package versions reproduces the same queries and
+metrics. (Diverse query selection with \code{diverse = TRUE} is
+deterministic and needs no seed.) It is stored in the session and
+reused by \code{\link{conflibert_active_next}}. Default: 42.}
 }
 \value{
 An object of class \code{"conflibert_al_session"}: a list
@@ -100,17 +100,12 @@ retrain and query the next batch.
 }
 }
 \examples{
-\dontrun{
-seed <- data.frame(
-  text  = c("Troops advanced.", "Nice weather today."),
-  label = c(1L, 0L)
-)
-pool <- c("Car bomb exploded.", "New coffee shop opened.", "...")
-
+\dontshow{if (conflibert_available()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+data <- conflibert_example("active")
 session <- conflibert_active_start(
-  seed = seed, pool = pool, query_size = 5, epochs = 1
+  seed = data$seed, pool = data$pool, query_size = 5, epochs = 1
 )
 session
 session$query
-}
+\dontshow{\}) # examplesIf}
 }

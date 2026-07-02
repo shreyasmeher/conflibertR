@@ -44,15 +44,13 @@
 #'   It has a themed \code{print()} method and a \code{plot()} method
 #'   showing the test-set confusion matrix.
 #' @export
-#' @examples
-#' \dontrun{
+#' @examplesIf conflibert_available()
 #' train <- data.frame(
 #'   text  = c("Troops advanced.", "Nice weather today."),
 #'   label = c(1L, 0L)
 #' )
 #' result <- conflibert_finetune(train, dev = train, test = train, epochs = 1)
 #' result$metrics
-#' }
 conflibert_finetune <- function(
     train, dev, test,
     model = "ConfliBERT", task = "binary",
@@ -119,18 +117,17 @@ conflibert_finetune <- function(
 #'   plus \code{runtime}. It has a themed \code{print()} method that
 #'   ranks models, and a \code{plot()} method comparing metrics.
 #' @export
-#' @examples
-#' \dontrun{
+#' @examplesIf conflibert_available()
+#' data <- conflibert_example("binary")
 #' comparison <- conflibert_compare(
-#'   train  = train_df,
-#'   dev    = dev_df,
-#'   test   = test_df,
-#'   models = c("ConfliBERT", "BERT Base Uncased", "RoBERTa Base"),
+#'   train  = data$train,
+#'   dev    = data$dev,
+#'   test   = data$test,
+#'   models = c("ConfliBERT", "BERT Base Uncased"),
 #'   task   = "binary",
-#'   epochs = 3
+#'   epochs = 1
 #' )
 #' comparison
-#' }
 conflibert_compare <- function(
     train, dev, test,
     models = c("ConfliBERT", "BERT Base Uncased"),

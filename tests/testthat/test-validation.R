@@ -37,28 +37,36 @@ test_that("training entry points expose a seed argument (default 42)", {
   }
 })
 
-test_that(".al_with_seed is reproducible and restores the RNG state", {
-  with_seed <- conflibertR:::.al_with_seed
+test_that(".al_kmeans_centers is deterministic and never touches the RNG", {
+  centers_of <- conflibertR:::.al_kmeans_centers
+  emb <- matrix(c(
+    0,     0,
+    0.1,   0,
+    10,   10,
+    10.1, 10,
+    -10,   5,
+    -10.2, 5.1
+  ), ncol = 2, byrow = TRUE)
 
-  # same seed -> same draw
-  a <- with_seed(123, runif(3))
-  b <- with_seed(123, runif(3))
-  expect_equal(a, b)
+  # deterministic: same input -> same centers, no seeding needed
+  expect_identical(centers_of(emb, 3L), centers_of(emb, 3L))
 
-  # NULL seed leaves expr untouched (just returns its value)
-  expect_equal(with_seed(NULL, 42L), 42L)
+  # anchored at the top-uncertainty candidate (row 1), k rows returned,
+  # and the centers are distinct points from the input
+  cc <- centers_of(emb, 3L)
+  expect_equal(nrow(cc), 3L)
+  expect_equal(cc[1, ], emb[1, ])
+  expect_equal(nrow(unique(cc)), 3L)
 
-  # the caller's global RNG stream is not disturbed
+  # the caller's RNG stream is not consumed or altered
   set.seed(999)
   before <- .Random.seed
-  invisible(with_seed(7, runif(5)))
+  invisible(centers_of(emb, 3L))
   expect_identical(.Random.seed, before)
-  # and the next draw matches what it would have been with no seeded call
-  set.seed(999)
-  expected_next <- runif(2)
-  set.seed(999)
-  invisible(with_seed(7, runif(5)))
-  expect_equal(runif(2), expected_next)
+
+  # fewer distinct rows than k: returns only the distinct centers
+  flat <- matrix(1, nrow = 4, ncol = 2)
+  expect_equal(nrow(centers_of(flat, 3L)), 1L)
 })
 
 test_that("conflibert_models lists the supported architectures", {

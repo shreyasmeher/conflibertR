@@ -25,8 +25,7 @@
 #'   columns \code{question}, \code{answer}, \code{score}, \code{start},
 #'   \code{end}, and \code{context}.
 #' @export
-#' @examples
-#' \dontrun{
+#' @examplesIf conflibert_available()
 #' conflibert_qa(
 #'   context  = "The ceasefire was signed in Geneva on March 15th.",
 #'   question = "Where was the ceasefire signed?"
@@ -39,7 +38,6 @@
 #'                "When was the ceasefire signed?"),
 #'   details  = TRUE
 #' )
-#' }
 conflibert_qa <- function(context, question, details = FALSE) {
   stopifnot(
     is.character(context), length(context) >= 1,

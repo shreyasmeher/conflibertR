@@ -81,12 +81,12 @@ any of the supported base models (ConfliBERT, BERT, RoBERTa,
 ModernBERT, DeBERTa, DistilBERT).
 }
 \examples{
-\dontrun{
+\dontshow{if (conflibert_available()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 train <- data.frame(
   text  = c("Troops advanced.", "Nice weather today."),
   label = c(1L, 0L)
 )
 result <- conflibert_finetune(train, dev = train, test = train, epochs = 1)
 result$metrics
-}
+\dontshow{\}) # examplesIf}
 }

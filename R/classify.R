@@ -15,15 +15,13 @@
 #'     \item{prob_positive}{Probability of the positive class.}
 #'   }
 #' @export
-#' @examples
-#' \dontrun{
+#' @examplesIf conflibert_available()
 #' conflibert_classify("A bomb exploded in the market.")
 #'
 #' conflibert_classify(c(
 #'   "Government troops clashed with rebels.",
 #'   "The weather was sunny and warm."
 #' ))
-#' }
 conflibert_classify <- function(text) {
   stopifnot(is.character(text), length(text) >= 1)
   py <- .get_py()
@@ -61,10 +59,8 @@ conflibert_classify <- function(text) {
 #'     \item{predicted}{Logical, TRUE if probability >= 0.5.}
 #'   }
 #' @export
-#' @examples
-#' \dontrun{
+#' @examplesIf conflibert_available()
 #' conflibert_multilabel("Insurgents kidnapped two aid workers near the border.")
-#' }
 conflibert_multilabel <- function(text) {
   stopifnot(is.character(text), length(text) >= 1)
   py <- .get_py()

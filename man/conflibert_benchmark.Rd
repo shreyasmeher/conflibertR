@@ -19,10 +19,10 @@ Evaluate the pretrained ConfliBERT binary classifier against labeled
 data and compute accuracy, precision, recall, and F1.
 }
 \examples{
-\dontrun{
+\dontshow{if (conflibert_available()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 conflibert_benchmark(
   texts  = c("A bomb exploded.", "The weather was nice."),
   labels = c(1L, 0L)
 )
-}
+\dontshow{\}) # examplesIf}
 }

@@ -27,8 +27,9 @@
 #' data <- conflibert_example("binary")
 #' data$train
 #'
-#' \dontrun{
+#' @examplesIf conflibert_available()
 #' # Fine-tune with example data (needs the Python backend)
+#' data <- conflibert_example("binary")
 #' result <- conflibert_finetune(
 #'   train = data$train, dev = data$dev, test = data$test,
 #'   model = "ConfliBERT", task = "binary", epochs = 1
@@ -40,7 +41,6 @@
 #'   models = c("ConfliBERT", "BERT Base Uncased"),
 #'   task = "binary", epochs = 1
 #' )
-#' }
 conflibert_example <- function(name = c("binary", "multiclass", "active")) {
   name <- match.arg(name)
   dir <- system.file("examples", name, package = "conflibertR")

@@ -29,8 +29,12 @@ Requires the \pkg{shiny} and \pkg{miniUI} packages. In RStudio the
 gadget opens as a modal dialog; elsewhere it opens in your browser.
 }
 \examples{
-\dontrun{
+\dontshow{if (interactive() && conflibert_available()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+data <- conflibert_example("active")
+session <- conflibert_active_start(
+  seed = data$seed, pool = data$pool, query_size = 5, epochs = 1
+)
 labels  <- conflibert_active_label(session)
 session <- conflibert_active_next(session, labels)
-}
+\dontshow{\}) # examplesIf}
 }
