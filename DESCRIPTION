@@ -1,6 +1,6 @@
 Package: conflibertR
 Title: Inference and Fine-Tuning with 'ConfliBERT' Conflict Text Models
-Version: 0.5.2
+Version: 0.5.3
 Authors@R: person("Shreyas", "Meher", email = "shreyasmeher@gmail.com",
     role = c("aut", "cre"), comment = c(ORCID = "0000-0002-9656-4374"))
 Description: An interface to 'ConfliBERT', a pretrained language model for

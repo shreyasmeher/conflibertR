@@ -37,6 +37,18 @@ test_that("training entry points expose a seed argument (default 42)", {
   }
 })
 
+test_that("conflibert_available respects the CONFLIBERTR_AVAILABLE override", {
+  old <- Sys.getenv("CONFLIBERTR_AVAILABLE", unset = NA)
+  on.exit(
+    if (is.na(old)) Sys.unsetenv("CONFLIBERTR_AVAILABLE")
+    else Sys.setenv(CONFLIBERTR_AVAILABLE = old)
+  )
+  Sys.setenv(CONFLIBERTR_AVAILABLE = "false")
+  expect_false(conflibert_available())
+  Sys.setenv(CONFLIBERTR_AVAILABLE = "true")
+  expect_true(conflibert_available())
+})
+
 test_that(".al_kmeans_centers is deterministic and never touches the RNG", {
   centers_of <- conflibertR:::.al_kmeans_centers
   emb <- matrix(c(

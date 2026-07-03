@@ -12,15 +12,18 @@ conflibert_available()
 \description{
 Returns \code{TRUE} when the \code{"conflibert"} Python environment
 exists and the core Python modules ('torch' and 'transformers') can
-be imported. It never installs anything, and when no environment is
-found it returns \code{FALSE} without initializing Python, so it is
-cheap and safe to call on any system. It is used to guard the
-package's examples on machines without the backend (such as CRAN's
-check machines), and you can use it the same way in scripts that
-should degrade gracefully.
+be imported. It never installs anything; environment discovery uses
+filesystem checks only (it does not run the conda binary), and when
+no environment is found it returns \code{FALSE} without initializing
+Python, so it is cheap and safe to call on any system. It is used to
+guard the package's examples on machines without the backend (such
+as CRAN's check machines), and you can use it the same way in
+scripts that should degrade gracefully.
 }
 \details{
-Set the environment variable \code{CONFLIBERTR_AVAILABLE} to
+The detection result is cached for the R session (if you have just
+run \code{\link{conflibert_install}}, restart R as its instructions
+say). Set the environment variable \code{CONFLIBERTR_AVAILABLE} to
 \code{"true"} or \code{"false"} to override the detection, e.g. to
 skip the backend-dependent examples during \code{R CMD check} on a
 machine that has the backend installed.

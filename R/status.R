@@ -2,14 +2,17 @@
 #'
 #' Returns \code{TRUE} when the \code{"conflibert"} Python environment
 #' exists and the core Python modules ('torch' and 'transformers') can
-#' be imported. It never installs anything, and when no environment is
-#' found it returns \code{FALSE} without initializing Python, so it is
-#' cheap and safe to call on any system. It is used to guard the
-#' package's examples on machines without the backend (such as CRAN's
-#' check machines), and you can use it the same way in scripts that
-#' should degrade gracefully.
+#' be imported. It never installs anything; environment discovery uses
+#' filesystem checks only (it does not run the conda binary), and when
+#' no environment is found it returns \code{FALSE} without initializing
+#' Python, so it is cheap and safe to call on any system. It is used to
+#' guard the package's examples on machines without the backend (such
+#' as CRAN's check machines), and you can use it the same way in
+#' scripts that should degrade gracefully.
 #'
-#' Set the environment variable \code{CONFLIBERTR_AVAILABLE} to
+#' The detection result is cached for the R session (if you have just
+#' run \code{\link{conflibert_install}}, restart R as its instructions
+#' say). Set the environment variable \code{CONFLIBERTR_AVAILABLE} to
 #' \code{"true"} or \code{"false"} to override the detection, e.g. to
 #' skip the backend-dependent examples during \code{R CMD check} on a
 #' machine that has the backend installed.
@@ -23,16 +26,11 @@ conflibert_available <- function() {
   if (nzchar(override)) {
     return(isTRUE(as.logical(override)))
   }
-  conda_envs <- tryCatch(reticulate::conda_list(), error = function(e) NULL)
-  conda_found <- !is.null(conda_envs) && "conflibert" %in% conda_envs$name
-  venv_found <- tryCatch(
-    reticulate::virtualenv_exists("conflibert"),
-    error = function(e) FALSE
-  )
-  if (!conda_found && !venv_found) {
-    return(FALSE)
+  if (!is.null(.cb$available)) {
+    return(.cb$available)
   }
-  all(vapply(
+  env_found <- !is.null(.cb_conda_env_dir()) || .cb_virtualenv_found()
+  .cb$available <- env_found && all(vapply(
     c("torch", "transformers"),
     function(mod) {
       tryCatch(reticulate::py_module_available(mod),
@@ -40,6 +38,7 @@ conflibert_available <- function() {
     },
     logical(1)
   ))
+  .cb$available
 }
 
 

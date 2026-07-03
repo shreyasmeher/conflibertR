@@ -1,8 +1,15 @@
-# conflibertR 0.5.2
+# conflibertR 0.5.3
 
 CRAN resubmission with review feedback addressed. No user-facing API
-changes.
+changes. (0.5.2 was submitted with these changes but did not pass the
+incoming pretest; 0.5.3 additionally makes backend detection fast on
+machines where conda is installed.)
 
+- Backend detection (package startup and `conflibert_available()`) now
+  uses filesystem checks only and caches its result for the session.
+  It previously ran `conda env list`, which can take more than 10
+  seconds per call on some systems; on CRAN's Windows pretest machine
+  that pushed two examples over the 10-second limit.
 - New `conflibert_available()`: a cheap check for whether the
   'conflibert' Python environment and its core modules are usable. It
   now guards all backend-dependent examples (they run wherever the
