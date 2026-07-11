@@ -221,7 +221,10 @@ ggplot2::autoplot(fit)   # same, as
 \end{lstlisting}
 
 \cbsection{Reproducibility}
-Training functions take \texttt{seed} (\fn{conflibert\_active\_start()}: \texttt{random\_seed}), default 42: same seed, hardware, and package versions give identical metrics and predictions. Change it to study run-to-run variability. Inference needs no seed; it is a deterministic forward pass.
+Training functions take \texttt{seed} (\fn{conflibert\_active\_start()}: \texttt{random\_seed}), default 42: same seed, hardware, and package versions give identical metrics and predictions. Change it to study run-to-run variability.
+
+\cbsection{Citing}
+Cite Hu et al.\ (2022), \textit{NAACL-HLT}, for the ConfliBERT model, and Brandt et al.\ (2025), \textit{Political Analysis}, for its validation against generative LLMs. \fn{citation("conflibertR")} gives BibTeX for both.
 
 \end{multicols}
 

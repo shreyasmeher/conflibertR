@@ -1,4 +1,4 @@
-citHeader("To cite conflibertR in publications, please cite the ConfliBERT model paper (Hu et al. 2022). If you use the question-answering or generative-comparison features, please also cite Brandt et al. (2025).")
+citHeader("To cite conflibertR in publications, please cite both the ConfliBERT model paper (Hu et al. 2022) and the Political Analysis paper validating these models for conflict text classification (Brandt et al. 2025).")
 
 bibentry(
   bibtype  = "InProceedings",
@@ -33,5 +33,6 @@ bibentry(
   ),
   journal  = "Political Analysis",
   year     = "2025",
-  pages    = "1--29"
+  pages    = "1--29",
+  doi      = "10.1017/pan.2025.10027"
 )
