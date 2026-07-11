@@ -1,0 +1,228 @@
+% conflibertR cheatsheet
+% Build: pdflatex conflibertR-cheatsheet.tex
+\documentclass[8pt]{extarticle}
+
+\usepackage[a4paper,landscape,margin=0.9cm,bottom=1.1cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{multicol}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage[hidelinks]{hyperref}
+
+% ---- palette (matches the hex logo) ----
+\definecolor{cbnavy}{HTML}{22365C}
+\definecolor{cbnavydark}{HTML}{12203C}
+\definecolor{cbred}{HTML}{E05C3A}
+\definecolor{cbamber}{HTML}{D99A1B}
+\definecolor{cbblue}{HTML}{8FA9CF}
+\definecolor{cbgray}{HTML}{6B6B6B}
+\definecolor{cbcodebg}{HTML}{F4F5F8}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{2pt}
+\setlength{\columnsep}{0.9cm}
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\fancyfoot[L]{\scriptsize\color{cbgray}conflibertR 0.5.3 \, · \, \href{https://CRAN.R-project.org/package=conflibertR}{CRAN.R-project.org/package=conflibertR}}
+\fancyfoot[R]{\scriptsize\color{cbgray}\href{https://github.com/shreyasmeher/conflibertR}{github.com/shreyasmeher/conflibertR} \, · \, July 2026}
+
+% ---- code style ----
+\lstset{
+  language=R,
+  basicstyle=\ttfamily\fontsize{7pt}{8.4pt}\selectfont,
+  keywordstyle=\color{cbnavy}\bfseries,
+  commentstyle=\color{cbgray},
+  stringstyle=\color{cbred},
+  backgroundcolor=\color{cbcodebg},
+  frame=single, rulecolor=\color{cbcodebg},
+  framesep=3pt, xleftmargin=3pt, xrightmargin=3pt,
+  aboveskip=3.5pt, belowskip=5pt,
+  columns=fullflexible, keepspaces=true,
+  showstringspaces=false, breaklines=true,
+  deletekeywords={text,dir,model,q,dev,seed,labels,start,save,next,c}
+}
+
+% ---- section header ----
+\newcommand{\cbsection}[1]{%
+  \vspace{5pt}%
+  {\color{cbnavy}\large\bfseries #1\par}\nointerlineskip\vspace{2.5pt}%
+  {\color{cbamber}\rule{\linewidth}{1.6pt}\par}\vspace{2pt}%
+}
+\newcommand{\cbsub}[1]{{\color{cbred}\bfseries #1}\par}
+\newcommand{\fn}[1]{\texttt{\bfseries\color{cbnavy}#1}}
+
+\begin{document}
+
+% ================= header =================
+\begin{minipage}[c]{0.86\textwidth}
+  {\fontsize{26pt}{26pt}\selectfont\bfseries\color{cbnavydark}conflibertR\ \ {\mdseries\color{cbgray}::\ cheat sheet}}\\[5pt]
+  {\color{cbgray}ConfliBERT in R: inference, fine-tuning, model comparison, and active learning for conflict and political violence text.}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.11\textwidth}
+  \raggedleft\includegraphics[height=2.1cm]{../man/figures/logo.png}
+\end{minipage}
+
+\vspace{2pt}
+{\color{cbnavydark}\rule{\textwidth}{1.2pt}}
+
+\begin{multicols}{3}
+
+% ================= column 1 =================
+\cbsection{Setup (once)}
+\begin{lstlisting}
+install.packages("conflibertR")
+library(conflibertR)
+conflibert_install()  # Python backend
+# restart R afterwards
+\end{lstlisting}
+Backend goes in a \texttt{conflibert} conda env (or virtualenv). Planning to use QA? Run \fn{conflibert\_install(qa = TRUE)} instead.
+
+\cbsub{Health checks}
+\begin{lstlisting}
+conflibert_status()     # full diagnostic
+conflibert_available()  # TRUE/FALSE guard
+\end{lstlisting}
+
+\cbsection{Inference (no training, no seed)}
+All functions are vectorized over character vectors and return tibbles that compose with dplyr. Results are deterministic.
+
+\cbsub{Named Entity Recognition}
+\begin{lstlisting}
+ents <- conflibert_ner(
+  "NATO forces were deployed near Kabul.")
+# tibble: label, score, start, end
+dplyr::filter(ents, label == "Location")
+\end{lstlisting}
+
+\cbsub{Binary classification (conflict / not)}
+\begin{lstlisting}
+conflibert_classify(
+  c("A bomb exploded in the market.",
+    "The weather was sunny and warm."))
+# label, class, confidence, prob_*
+\end{lstlisting}
+
+\cbsub{Multilabel classification}
+\begin{lstlisting}
+conflibert_multilabel(texts)
+# one probability column per label
+\end{lstlisting}
+
+\cbsub{Question answering}
+\begin{lstlisting}
+conflibert_qa(
+  context  = "Rebels seized the town in May.",
+  question = "Who seized the town?")
+conflibert_qa(context, question,
+              details = TRUE)  # + scores
+\end{lstlisting}
+
+\cbsub{Quick benchmark of the base classifier}
+\begin{lstlisting}
+conflibert_benchmark(texts, labels)
+\end{lstlisting}
+Returns accuracy, precision, recall, and F1 as a one-row tibble.
+
+\columnbreak
+% ================= column 2 =================
+\cbsection{Bundled example data}
+\begin{lstlisting}
+data <- conflibert_example("binary")
+# also "multiclass" and "active"
+str(data)  # $train / $dev / $test
+\end{lstlisting}
+Each element is a data.frame with \texttt{text} and \texttt{label} columns, the format every training function expects.
+
+\cbsection{Fine-tune your own classifier}
+\begin{lstlisting}
+fit <- conflibert_finetune(
+  train, dev, test,
+  model = "ConfliBERT",
+  task  = "binary",   # or "multiclass"
+  epochs = 3, batch_size = 8, lr = 2e-5,
+  save_dir = "my_model",
+  seed = 42)          # reproducible
+fit$metrics       # test-set tibble
+fit$predictions; fit$probabilities
+plot(fit)         # confusion matrix
+\end{lstlisting}
+
+\cbsub{Low-memory training (LoRA)}
+\begin{lstlisting}
+conflibert_finetune(..., use_lora = TRUE,
+  lora_rank = 8, lora_alpha = 16)
+# ~5x less GPU memory; adapter is
+# merged before saving
+\end{lstlisting}
+
+\cbsub{Reload and predict later}
+\begin{lstlisting}
+clf <- conflibert_load("my_model")
+predict(clf, new_texts)
+\end{lstlisting}
+
+\cbsection{Compare base models}
+\begin{lstlisting}
+cmp <- conflibert_compare(
+  train, dev, test,
+  models = c("ConfliBERT",
+             "BERT Base Uncased",
+             "ModernBERT Base"))
+cmp        # metrics side by side
+plot(cmp)  # comparison chart
+\end{lstlisting}
+\fn{conflibert\_models()} lists all 7 choices: ConfliBERT, BERT Base (un)cased, RoBERTa Base, ModernBERT Base, DeBERTa v3 Base, DistilBERT Base.
+
+\columnbreak
+% ================= column 3 =================
+\cbsection{Active learning}
+Label only the texts the model is least sure about: start from a small labeled seed set, iterate in rounds.
+\begin{lstlisting}
+data <- conflibert_example("active")
+s <- conflibert_active_start(
+  seed = data$seed,   # labeled df
+  pool = data$pool,   # unlabeled df
+  dev  = data$dev,
+  query_size = 10,
+  strategy = "entropy",  # or "margin",
+                # "least_confidence"
+  diverse = FALSE,    # TRUE = spread
+                      # batch via k-means
+  random_seed = 42)
+s$query   # texts to label next
+\end{lstlisting}
+
+\cbsub{Label a round, retrain, repeat}
+\begin{lstlisting}
+# point-and-click Shiny gadget:
+labels <- conflibert_active_label(s)
+# ...or supply labels programmatically
+s <- conflibert_active_next(s, labels)
+s$metrics            # per-round history
+plot(s)              # learning curve
+conflibert_active_save(s, "al_model")
+\end{lstlisting}
+
+\cbsection{Plots \& output}
+Training and inference objects have themed \fn{print()} methods; results stay plain tibbles underneath.
+\begin{lstlisting}
+plot(fit); plot(cmp); plot(s)
+ggplot2::autoplot(fit)   # same, as
+                         # ggplot object
++ theme_conflibert()     # package theme
+\end{lstlisting}
+
+\cbsection{Reproducibility}
+Training functions take \texttt{seed} (\fn{conflibert\_active\_start()}: \texttt{random\_seed}), default 42: same seed, hardware, and package versions give identical metrics and predictions. Change it to study run-to-run variability. Inference needs no seed; it is a deterministic forward pass.
+
+\end{multicols}
+
+\end{document}

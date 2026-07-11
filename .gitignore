@@ -8,3 +8,6 @@ inst/python/__pycache__/
 *.Rcheck/
 *.tar.gz
 README.html
+cheatsheet/*.aux
+cheatsheet/*.log
+cheatsheet/*.out

@@ -1,7 +1,9 @@
-# conflibertR
+# conflibertR <img src="man/figures/logo.png" align="right" height="139" alt="conflibertR hex logo" />
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/shreyasmeher/conflibertR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/shreyasmeher/conflibertR/actions/workflows/R-CMD-check.yaml)
+[![CRAN status](https://www.r-pkg.org/badges/version/conflibertR)](https://CRAN.R-project.org/package=conflibertR)
+[![Codecov test coverage](https://codecov.io/gh/shreyasmeher/conflibertR/graph/badge.svg)](https://app.codecov.io/gh/shreyasmeher/conflibertR)
 <!-- badges: end -->
 
 R interface to [ConfliBERT](https://github.com/eventdata/ConfliBERT), a pretrained language model for conflict and political violence text analysis.
@@ -14,9 +16,18 @@ R interface to [ConfliBERT](https://github.com/eventdata/ConfliBERT), a pretrain
 
 **Parameter-efficient training:** LoRA fine-tuning cuts GPU memory ~5× so bigger models run on modest hardware.
 
+## Cheatsheet
+
+A one-page overview of the whole package:
+[conflibertR cheatsheet (PDF)](cheatsheet/conflibertR-cheatsheet.pdf)
+
 ## Installation
 
 ```r
+# From CRAN
+install.packages("conflibertR")
+
+# Development version from GitHub
 # install.packages("devtools")
 devtools::install_github("shreyasmeher/conflibertR")
 ```

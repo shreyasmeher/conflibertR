@@ -16,3 +16,4 @@ __pycache__
 ^.*\.Rcheck$
 ^.*\.tar\.gz$
 ^CRAN-SUBMISSION$
+^cheatsheet$
